@@ -2847,6 +2847,216 @@ class LobsterSet(MPRelaxSet):
         self._config_dict["KPOINTS"].update({"reciprocal_density": self.reciprocal_density})
 
 
+class MPPhononSet(MPRelaxSet):
+    """
+    Creates input files for a phonon calculation
+
+    """
+    def __init__(
+            self,
+            structure,
+            prev_incar=None,
+            prev_kpoints=None,
+            supercell=None,
+            displacement: float = 0.01,
+            numberdisplacement: int = 0,
+            reciprocal_density=100,
+            **kwargs
+    ):
+        """
+
+        Args:
+            structure:
+            prev_incar:
+            prev_kpoints:
+            supercell:
+            displacement:
+            numberdisplacement:
+            reciprocal_density:
+            **kwargs:
+        """
+        super().__init__(structure, **kwargs)
+        if isinstance(prev_incar, str):
+            prev_incar = Incar.from_file(prev_incar)
+        if isinstance(prev_kpoints, str):
+            prev_kpoints = Kpoints.from_file(prev_kpoints)
+
+        self.prev_incar = prev_incar
+        self.prev_kpoints = prev_kpoints
+        self.reciprocal_density = reciprocal_density
+        self.kwargs = kwargs
+        self.supercell = supercell
+        self.displacement = displacement
+        self.numberdisplacement = numberdisplacement
+
+    @property
+    def incar(self):
+        """
+
+        Returns:
+            INCAR
+
+        """
+        parent_incar = super().incar
+        incar = (
+            Incar(self.prev_incar)
+            if self.prev_incar is not None
+            else Incar(parent_incar)
+        )
+        incar.update(
+            {
+                "IBRION": -1,
+                "ISMEAR": 0,
+                "LORBIT": None,
+                "LWAVE": False,
+                "NSW": 0,
+                "ICHARG": 0,
+                "ALGO": "Normal",
+                "LREAL": False,
+                "ISIF": 2,
+            }
+        )
+
+        for k in ["MAGMOM", "NUPDOWN"] + list(
+                self.kwargs.get("user_incar_settings", {}).keys()
+        ):
+            # For these parameters as well as user specified settings, override
+            # the incar settings.
+            if parent_incar.get(k, None) is not None:
+                incar[k] = parent_incar[k]
+            else:
+                incar.pop(k, None)
+
+        # use new LDAUU when possible b/c the POSCAR might have changed
+        # representation
+        if incar.get("LDAU"):
+            u = incar.get("LDAUU", [])
+            j = incar.get("LDAUJ", [])
+            if sum([u[x] - j[x] for x, y in enumerate(u)]) > 0:
+                for tag in ("LDAUU", "LDAUL", "LDAUJ"):
+                    incar.update({tag: parent_incar[tag]})
+            # ensure to have LMAXMIX for GGA+U static run
+            if "LMAXMIX" not in incar:
+                incar.update({"LMAXMIX": parent_incar["LMAXMIX"]})
+
+        # Compare ediff between previous and staticinputset values,
+        # choose the tighter ediff
+        incar["EDIFF"] = min(incar.get("EDIFF", 1), parent_incar["EDIFF"])
+        return incar
+
+    @property
+    def kpoints(self) -> Optional[Kpoints]:
+        """
+
+        Returns:
+            Kpoints
+
+        """
+        self._config_dict["KPOINTS"]["reciprocal_density"] = self.reciprocal_density
+        kpoints = super().kpoints
+
+        # Prefer to use k-point scheme from previous run
+        # except for when lepsilon = True is specified
+        if kpoints is not None:
+            if self.prev_kpoints and self.prev_kpoints.style != kpoints.style:
+                if (self.prev_kpoints.style == Kpoints.supported_modes.Monkhorst) and (
+                        not self.lepsilon
+                ):
+                    k_div = [kp + 1 if kp % 2 == 1 else kp for kp in kpoints.kpts[0]]
+                    kpoints = Kpoints.monkhorst_automatic(k_div)
+                else:
+                    kpoints = Kpoints.gamma_automatic(kpoints.kpts[0])
+        return kpoints
+
+    def override_from_prev_calc(self,
+                                prev_calc_dir: str=".",
+                                supercellmatrix=None,
+                                displacement: float=0.01,
+                                numberdisplacement: int=0):
+        """
+        Update the input set to include settings from a previous calculation.
+
+        Args:
+            prev_calc_dir (str): The path to the previous calculation directory.
+            supercellmatrix (list):
+            displacement (float):
+            numberdisplacement (int):
+
+        Returns:
+            The input set with the settings (structure, k-points, incar, etc)
+            updated using the previous VASP run.
+        """
+        supercellmatrix = supercellmatrix or [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+
+        vasprun, outcar = get_vasprun_outcar(prev_calc_dir)
+
+        self.prev_incar = vasprun.incar
+        self.prev_kpoints = vasprun.kpoints
+
+        if self.standardize:
+            warnings.warn(
+                "Use of standardize=True with from_prev_run is not "
+                "recommended as there is no guarantee the copied "
+                "files will be appropriate for the standardized "
+                "structure."
+            )
+
+        structure = get_structure_from_prev_run(vasprun, outcar)
+
+        cell = get_phonopy_structure(structure)
+
+        phonon = Phonopy(cell,
+                         supercellmatrix,
+                         primitive_matrix=[[1.0, 0.0, 0.0],
+                                           [0.0, 1.0, 0.0],
+                                           [0.0, 0.0, 1.0]],
+                         factor=VaspToTHz)
+        # supercellnormal = phonon.get_supercell()
+        print(displacement)
+        phonon.generate_displacements(distance=displacement)
+        # print("[Phonopy] Atomic displacements:")
+        # disps = phonon.get_displacements()
+        supercells = phonon.get_supercells_with_displacements()
+        # here: the displacement is included
+        cell = Atoms(symbols=supercells[numberdisplacement].get_chemical_symbols(),
+                     scaled_positions=supercells[numberdisplacement].get_scaled_positions(),
+                     cell=supercells[numberdisplacement].get_cell(),
+                     pbc=True)
+
+        # TODO: include generation of supercell
+
+        self._structure = AseAtomsAdaptor.get_structure(cell)
+        # multiply the reciprocal density if needed
+        return self
+
+    @classmethod
+    def from_prev_calc(cls,
+                       prev_calc_dir=".",
+                       supercellmatrix=None,
+                       displacement=0.01,
+                       numberdisplacement=0,
+                       **kwargs):
+        """
+
+        Args:
+            prev_calc_dir:
+            supercellmatrix:
+            displacement:
+            numberdisplacement:
+            **kwargs:
+
+        Returns:
+            create calc
+
+        """
+        supercellmatrix = supercellmatrix or [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        input_set = cls(_dummy_structure, **kwargs)
+        return input_set.override_from_prev_calc(prev_calc_dir=prev_calc_dir,
+                                                 supercellmatrix=supercellmatrix,
+                                                 displacement=displacement,
+                                                 numberdisplacement=numberdisplacement)
+
+
 def get_vasprun_outcar(path, parse_dos=True, parse_eigen=True):
     """
     :param path: Path to get the vasprun.xml and OUTCAR.
