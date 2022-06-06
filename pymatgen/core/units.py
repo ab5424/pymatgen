@@ -1,4 +1,3 @@
-# coding: utf-8
 # Copyright (c) Pymatgen Development Team.
 # Distributed under the terms of the MIT License.
 
@@ -74,9 +73,9 @@ BASE_UNITS = {
     "memory": {
         "byte": 1,
         "Kb": 1024,
-        "Mb": 1024 ** 2,
-        "Gb": 1024 ** 3,
-        "Tb": 1024 ** 4,
+        "Mb": 1024**2,
+        "Gb": 1024**3,
+        "Tb": 1024**4,
     },
 }
 
@@ -235,7 +234,7 @@ class Unit(collections.abc.Mapping):
     def __repr__(self):
         sorted_keys = sorted(self._unit.keys(), key=lambda k: (-self._unit[k], k))
         return " ".join(
-            ["{}^{}".format(k, self._unit[k]) if self._unit[k] != 1 else k for k in sorted_keys if self._unit[k] != 0]
+            [f"{k}^{self._unit[k]}" if self._unit[k] != 1 else k for k in sorted_keys if self._unit[k] != 0]
         )
 
     def __str__(self):
@@ -266,7 +265,7 @@ class Unit(collections.abc.Mapping):
             if not derived:
                 si, f = _get_si_unit(k)
                 b[si] += v
-                factor *= f ** v
+                factor *= f**v
         return {k: v for k, v in b.items() if v != 0}, factor
 
     def get_conversion_factor(self, new_unit):
@@ -285,7 +284,7 @@ class Unit(collections.abc.Mapping):
         factor = ofactor / nfactor
         for uo, un in zip(units_old, units_new):
             if uo[1] != un[1]:
-                raise UnitError("Units %s and %s are not compatible!" % (uo, un))
+                raise UnitError(f"Units {uo} and {un} are not compatible!")
             c = ALL_UNITS[_UNAME2UTYPE[uo[0]]]
             factor *= (c[uo[0]] / c[un[0]]) ** uo[1]
         return factor
@@ -327,7 +326,7 @@ class FloatWithUnit(float):
             if char.isalpha() or char.isspace():
                 break
         else:
-            raise Exception("Unit is missing in string %s" % s)
+            raise Exception(f"Unit is missing in string {s}")
         num, unit = float(s[:i]), s[i:]
 
         # Find unit type (set it to None if it cannot be detected)
@@ -356,7 +355,7 @@ class FloatWithUnit(float):
             unit_type (str): A type of unit. E.g., "charge"
         """
         if unit_type is not None and str(unit) not in ALL_UNITS[unit_type]:
-            raise UnitError("{} is not a supported unit for {}".format(unit, unit_type))
+            raise UnitError(f"{unit} is not a supported unit for {unit_type}")
         self._unit = Unit(unit)
         self._unit_type = unit_type
 
@@ -365,7 +364,7 @@ class FloatWithUnit(float):
 
     def __str__(self):
         s = super().__str__()
-        return "{} {}".format(s, self._unit)
+        return f"{s} {self._unit}"
 
     def __add__(self, other):
         if not hasattr(other, "unit_type"):
@@ -398,7 +397,7 @@ class FloatWithUnit(float):
         return FloatWithUnit(float(self) * other, unit_type=None, unit=self._unit * other._unit)
 
     def __pow__(self, i):
-        return FloatWithUnit(float(self) ** i, unit_type=None, unit=self._unit ** i)
+        return FloatWithUnit(float(self) ** i, unit_type=None, unit=self._unit**i)
 
     def __truediv__(self, other):
         val = super().__truediv__(other)
@@ -411,7 +410,6 @@ class FloatWithUnit(float):
 
     def __getnewargs__(self):
         """Function used by pickle to recreate object."""
-        # print(self.__dict__)
         # FIXME
         # There's a problem with _unit_type if we try to unpickle objects from file.
         # since self._unit_type might not be defined. I think this is due to
@@ -427,11 +425,9 @@ class FloatWithUnit(float):
     def __getstate__(self):
         state = self.__dict__.copy()
         state["val"] = float(self)
-        # print("in getstate %s" % state)
         return state
 
     def __setstate__(self, state):
-        # print("in setstate %s" % state)
         self._unit = state["_unit"]
 
     @property
@@ -547,10 +543,7 @@ class ArrayWithUnit(np.ndarray):
         return self._unit
 
     def __reduce__(self):
-        # print("in reduce")
         reduce = list(super().__reduce__())
-        # print("unit",self._unit)
-        # print(reduce[2])
         reduce[2] = {"np_state": reduce[2], "_unit": self._unit}
         return tuple(reduce)
 
@@ -560,15 +553,15 @@ class ArrayWithUnit(np.ndarray):
         self._unit = state["_unit"]
 
     def __repr__(self):
-        return "{} {}".format(np.array(self).__repr__(), self.unit)
+        return f"{np.array(self).__repr__()} {self.unit}"
 
     def __str__(self):
-        return "{} {}".format(np.array(self).__str__(), self.unit)
+        return f"{np.array(self).__str__()} {self.unit}"
 
     def __add__(self, other):
         if hasattr(other, "unit_type"):
             if other.unit_type != self.unit_type:
-                raise UnitError("Adding different types of units is" " not allowed")
+                raise UnitError("Adding different types of units is not allowed")
 
             if other.unit != self.unit:
                 other = other.to(self.unit)
@@ -789,7 +782,7 @@ def obj_with_unit(obj, unit):
 
     if isinstance(obj, numbers.Number):
         return FloatWithUnit(obj, unit=unit, unit_type=unit_type)
-    if isinstance(obj, collections.Mapping):
+    if isinstance(obj, collections.abc.Mapping):
         return {k: obj_with_unit(v, unit) for k, v in obj.items()}
     return ArrayWithUnit(obj, unit=unit, unit_type=unit_type)
 
@@ -835,7 +828,7 @@ def unitized(unit):
             elif val is None:
                 pass
             else:
-                raise TypeError("Don't know how to assign units to %s" % str(val))
+                raise TypeError(f"Don't know how to assign units to {str(val)}")
             return val
 
         return wrapped_f

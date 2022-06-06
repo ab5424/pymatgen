@@ -1,4 +1,3 @@
-# coding: utf-8
 # Copyright (c) Pymatgen Development Team.
 # Distributed under the terms of the MIT License.
 
@@ -148,7 +147,7 @@ class InterstitialGenerator(DefectGenerator):
     Generator for interstitials at positions
     where the interstitialcy is coordinated by nearest neighbors
     in a way that resembles basic structure motifs
-    (e.g., tetrahedra, octahedra).  The algorithm is called InFiT
+    (e.g., tetrahedra, octahedra). The algorithm is called InFiT
     (Interstitialcy Finding Tool), it was introducted by
     Nils E. R. Zimmermann, Matthew K. Horton, Anubhav Jain,
     and Maciej Haranczyk (Front. Mater., 4, 34, 2017),
@@ -282,7 +281,7 @@ class SimpleChargeGenerator(DefectGenerator):
                 self.defect.site.coords, 0.1, include_index=True
             )[0][2]
             def_site_valence = struct_valences[site_index]
-        except Exception:  # sometimes valences cant be assigned
+        except Exception:  # sometimes valences can't be assigned
             def_site_valence = 0
 
         if isinstance(defect, Vacancy):

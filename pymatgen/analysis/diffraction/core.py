@@ -1,4 +1,3 @@
-# coding: utf-8
 # Copyright (c) Pymatgen Development Team.
 # Distributed under the terms of the MIT License.
 
@@ -73,7 +72,6 @@ class AbstractDiffractionPatternCalculator(abc.ABC):
         Returns:
             (DiffractionPattern)
         """
-        pass
 
     def get_plot(
         self,
@@ -94,9 +92,9 @@ class AbstractDiffractionPatternCalculator(abc.ABC):
                 None if you want all diffracted beams within the limiting
                 sphere of radius 2 / wavelength.
             annotate_peaks (str or None): Whether and how to annotate the peaks
-                with hkl indices.  Default is 'compact', i.e. show short
-                version (oriented vertically), e.g. 100.  If 'full', show
-                long version, e.g. (1, 0, 0).  If None, do not show anything.
+                with hkl indices. Default is 'compact', i.e. show short
+                version (oriented vertically), e.g. 100. If 'full', show
+                long version, e.g. (1, 0, 0). If None, do not show anything.
             ax: matplotlib :class:`Axes` or None if a new figure should be
                 created.
             with_labels: True to add xlabels and ylabels to the plot.
@@ -133,7 +131,7 @@ class AbstractDiffractionPatternCalculator(abc.ABC):
                 elif annotate_peaks == "compact":
                     if all(all(i < 10 for i in hkl_tuple) for hkl_tuple in hkl_tuples):
                         label = ",".join(["".join([str(i) for i in hkl_tuple]) for hkl_tuple in hkl_tuples])
-                        # 'compact' label.  Would be unclear for indices >= 10
+                        # 'compact' label. Would be unclear for indices >= 10
                         # It would have more than 3 figures, e.g. 1031
 
                     if i / imax > 0.5:  # Big peak: annotation on the side
@@ -176,9 +174,9 @@ class AbstractDiffractionPatternCalculator(abc.ABC):
                 None if you want all diffracted beams within the limiting
                 sphere of radius 2 / wavelength.
             annotate_peaks (str or None): Whether and how to annotate the peaks
-                with hkl indices.  Default is 'compact', i.e. show short
-                version (oriented vertically), e.g. 100.  If 'full', show
-                long version, e.g. (1, 0, 0).  If None, do not show anything.
+                with hkl indices. Default is 'compact', i.e. show short
+                version (oriented vertically), e.g. 100. If 'full', show
+                long version, e.g. (1, 0, 0). If None, do not show anything.
         """
         self.get_plot(structure, **kwargs).show()
 
@@ -194,9 +192,9 @@ class AbstractDiffractionPatternCalculator(abc.ABC):
                 None if you want all diffracted beams within the limiting
                 sphere of radius 2 / wavelength.
             annotate_peaks (str or None): Whether and how to annotate the peaks
-                with hkl indices.  Default is 'compact', i.e. show short
-                version (oriented vertically), e.g. 100.  If 'full', show
-                long version, e.g. (1, 0, 0).  If None, do not show anything.
+                with hkl indices. Default is 'compact', i.e. show short
+                version (oriented vertically), e.g. 100. If 'full', show
+                long version, e.g. (1, 0, 0). If None, do not show anything.
             fontsize: (int) fontsize for peak labels.
         """
         import matplotlib.pyplot as plt
@@ -207,7 +205,7 @@ class AbstractDiffractionPatternCalculator(abc.ABC):
         for i, (ax, structure) in enumerate(zip(axes.ravel(), structures)):
             self.get_plot(structure, fontsize=fontsize, ax=ax, with_labels=i == nrows - 1, **kwargs)
             spg_symbol, spg_number = structure.get_space_group_info()
-            ax.set_title("{} {} ({}) ".format(structure.formula, spg_symbol, spg_number))
+            ax.set_title(f"{structure.formula} {spg_symbol} ({spg_number}) ")
 
         return fig
 
@@ -233,10 +231,10 @@ def get_unique_families(hkls):
     unique = collections.defaultdict(list)
     for hkl1 in hkls:
         found = False
-        for hkl2 in unique.keys():
+        for hkl2, v2 in unique.items():
             if is_perm(hkl1, hkl2):
                 found = True
-                unique[hkl2].append(hkl1)
+                v2.append(hkl1)
                 break
         if not found:
             unique[hkl1].append(hkl1)
