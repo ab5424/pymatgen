@@ -1,4 +1,3 @@
-# coding: utf-8
 # Copyright (c) Pymatgen Development Team.
 # Distributed under the terms of the MIT License.
 
@@ -42,8 +41,7 @@ class AbstractRatioFunction:
         """
         if function not in self.ALLOWED_FUNCTIONS:
             raise ValueError(
-                'Function "{}" is not allowed in RatioFunction of '
-                'type "{}"'.format(function, self.__class__.__name__)
+                'Function "{}" is not allowed in RatioFunction of ' 'type "{}"'.format(function, type(self).__name__)
             )
         self.eval = object.__getattribute__(self, function)
         self.function = function
@@ -69,31 +67,31 @@ class AbstractRatioFunction:
             # If there are missing options, raise an error
             if missing_options:
                 if len(function_options) == 1:
-                    opts = 'Option "{}"'.format(function_options[0])
+                    opts = f'Option "{function_options[0]}"'
                 else:
-                    opts1 = ", ".join(['"{}"'.format(op) for op in function_options[:-1]])
-                    opts = "Options {}".format(" and ".join([opts1, '"{}"'.format(function_options[-1])]))
+                    opts1 = ", ".join([f'"{op}"' for op in function_options[:-1]])
+                    opts = "Options {}".format(" and ".join([opts1, f'"{function_options[-1]}"']))
                 if options_dict is None or len(options_dict) == 0:
                     missing = "no option was provided."
                 else:
                     optgiven = list(options_dict.keys())
                     if len(options_dict) == 1:
-                        missing = 'only "{}" was provided.'.format(optgiven[0])
+                        missing = f'only "{optgiven[0]}" was provided.'
                     else:
-                        missing1 = ", ".join(['"{}"'.format(miss) for miss in optgiven[:-1]])
-                        missing = "only {} were provided.".format(" and ".join([missing1, '"{}"'.format(optgiven[-1])]))
+                        missing1 = ", ".join([f'"{miss}"' for miss in optgiven[:-1]])
+                        missing = "only {} were provided.".format(" and ".join([missing1, f'"{optgiven[-1]}"']))
                 raise ValueError(
                     '{} should be provided for function "{}" in RatioFunction of '
-                    'type "{}" while {}'.format(opts, self.function, self.__class__.__name__, missing)
+                    'type "{}" while {}'.format(opts, self.function, type(self).__name__, missing)
                 )
             # Setup the options and raise an error if a wrong option is provided
             for key, val in options_dict.items():
                 if key not in function_options:
                     raise ValueError(
                         'Option "{}" not allowed for function "{}" in RatioFunction of '
-                        'type "{}"'.format(key, self.function, self.__class__.__name__)
+                        'type "{}"'.format(key, self.function, type(self).__name__)
                     )
-                self.__setattr__(key, val)
+                setattr(self, key, val)
 
     def evaluate(self, value):
         """Evaluate the ratio function for the given value.

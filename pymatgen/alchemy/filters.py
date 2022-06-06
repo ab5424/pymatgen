@@ -1,4 +1,3 @@
-# coding: utf-8
 # Copyright (c) Pymatgen Development Team.
 # Distributed under the terms of the MIT License.
 
@@ -88,10 +87,10 @@ class ContainsSpecieFilter(AbstractStructureFilter):
         return "\n".join(
             [
                 "ContainsSpecieFilter with parameters:",
-                "species = {}".format(self._species),
-                "strict_compare = {}".format(self._strict),
-                "AND = {}".format(self._AND),
-                "exclude = {}".format(self._exclude),
+                f"species = {self._species}",
+                f"strict_compare = {self._strict}",
+                f"AND = {self._AND}",
+                f"exclude = {self._exclude}",
             ]
         )
 
@@ -100,8 +99,8 @@ class ContainsSpecieFilter(AbstractStructureFilter):
         Returns: MSONAble dict
         """
         return {
-            "@module": self.__class__.__module__,
-            "@class": self.__class__.__name__,
+            "@module": type(self).__module__,
+            "@class": type(self).__name__,
             "init_args": {
                 "species": [str(sp) for sp in self._species],
                 "strict_compare": self._strict,
@@ -155,7 +154,7 @@ class SpecieProximityFilter(AbstractStructureFilter):
             species = site.species.keys()
             sp_to_test = set(species).intersection(all_species)
             if sp_to_test:
-                max_r = max([self.specie_and_min_dist[sp] for sp in sp_to_test])
+                max_r = max(self.specie_and_min_dist[sp] for sp in sp_to_test)
                 nn = structure.get_neighbors(site, max_r)
                 for sp in sp_to_test:
                     for nnsite, dist, *_ in nn:
@@ -169,8 +168,8 @@ class SpecieProximityFilter(AbstractStructureFilter):
         Returns: MSONable dict
         """
         return {
-            "@module": self.__class__.__module__,
-            "@class": self.__class__.__name__,
+            "@module": type(self).__module__,
+            "@class": type(self).__name__,
             "init_args": {"specie_and_min_dist_dict": {str(sp): v for sp, v in self.specie_and_min_dist.items()}},
         }
 
@@ -300,8 +299,8 @@ class RemoveExistingFilter(AbstractStructureFilter):
         Returns: MSONable dict
         """
         return {
-            "@module": self.__class__.__module__,
-            "@class": self.__class__.__name__,
+            "@module": type(self).__module__,
+            "@class": type(self).__name__,
             "init_args": {"structure_matcher": self.structure_matcher.as_dict()},
         }
 
@@ -318,7 +317,6 @@ class ChargeBalanceFilter(AbstractStructureFilter):
         """
         No args required.
         """
-        pass
 
     def test(self, structure):
         """

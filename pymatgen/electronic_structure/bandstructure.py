@@ -1,10 +1,10 @@
-# coding: utf-8
 # Copyright (c) Pymatgen Development Team.
 # Distributed under the terms of the MIT License.
 
 """
 This module provides classes to define everything related to band structures.
 """
+from __future__ import annotations
 
 import collections
 import itertools
@@ -34,7 +34,7 @@ __date__ = "March 14, 2012"
 class Kpoint(MSONable):
     """
     Class to store kpoint objects. A kpoint is defined with a lattice and frac
-    or cartesian coordinates syntax similar than the site object in
+    or Cartesian coordinates syntax similar than the site object in
     pymatgen.core.structure.
     """
 
@@ -55,7 +55,7 @@ class Kpoint(MSONable):
                 cell, i.e., all fractional coordinates satisfy 0 <= a < 1.
                 Defaults to False.
             coords_are_cartesian: Boolean indicating if the coordinates given are
-                in cartesian or fractional coordinates (by default fractional)
+                in Cartesian or fractional coordinates (by default fractional)
             label: the label of the kpoint if any (None by default)
         """
         self._lattice = lattice
@@ -63,8 +63,8 @@ class Kpoint(MSONable):
         self._label = label
 
         if to_unit_cell:
-            for i in range(len(self._fcoords)):
-                self._fcoords[i] -= math.floor(self._fcoords[i])
+            for i, fc in enumerate(self._fcoords):
+                self._fcoords[i] -= math.floor(fc)
 
         self._ccoords = lattice.get_cartesian_coords(self._fcoords)
 
@@ -93,7 +93,7 @@ class Kpoint(MSONable):
     @property
     def cart_coords(self):
         """
-        The cartesian coordinates of the kpoint as a numpy array
+        The Cartesian coordinates of the kpoint as a numpy array
         """
         return np.copy(self._ccoords)
 
@@ -120,21 +120,21 @@ class Kpoint(MSONable):
 
     def __str__(self):
         """
-        Returns a string with fractional, cartesian coordinates and label
+        Returns a string with fractional, Cartesian coordinates and label
         """
-        return "{} {} {}".format(self.frac_coords, self.cart_coords, self.label)
+        return f"{self.frac_coords} {self.cart_coords} {self.label}"
 
     def as_dict(self):
         """
-        Json-serializable dict representation of a kpoint
+        JSON-serializable dict representation of a kpoint
         """
         return {
             "lattice": self.lattice.as_dict(),
             "fcoords": self.frac_coords.tolist(),
             "ccoords": self.cart_coords.tolist(),
             "label": self.label,
-            "@module": self.__class__.__module__,
-            "@class": self.__class__.__name__,
+            "@module": type(self).__module__,
+            "@class": type(self).__name__,
         }
 
     @classmethod
@@ -202,15 +202,15 @@ class BandStructure:
 
     def __init__(
         self,
-        kpoints,
-        eigenvals,
-        lattice,
-        efermi,
+        kpoints: np.ndarray,
+        eigenvals: dict[Spin, np.ndarray],
+        lattice: Lattice,
+        efermi: float,
         labels_dict=None,
-        coords_are_cartesian=False,
-        structure=None,
-        projections=None,
-    ):
+        coords_are_cartesian: bool = False,
+        structure: Structure = None,
+        projections: dict[Spin, np.ndarray] = None,
+    ) -> None:
         """
         Args:
             kpoints: list of kpoint as numpy arrays, in frac_coords of the
@@ -224,9 +224,9 @@ class BandStructure:
             lattice: The reciprocal lattice as a pymatgen Lattice object.
                 Pymatgen uses the physics convention of reciprocal lattice vectors
                 WITH a 2*pi coefficient
-            efermi: fermi energy
+            efermi (float): fermi energy
             labels_dict: (dict) of {} this links a kpoint (in frac coords or
-                cartesian coordinates depending on the coords) to a label.
+                Cartesian coordinates depending on the coords) to a label.
             coords_are_cartesian: Whether coordinates are cartesian.
             structure: The crystal structure (as a pymatgen Structure object)
                 associated with the band structure. This is needed if we
@@ -248,7 +248,7 @@ class BandStructure:
             labels_dict = {}
 
         if len(self.projections) != 0 and self.structure is None:
-            raise Exception("if projections are provided a structure object" " needs also to be given")
+            raise Exception("if projections are provided a structure object needs also to be given")
 
         for k in kpoints:
             # let see if this kpoint has been assigned a label
@@ -362,7 +362,7 @@ class BandStructure:
             - "energy": The energy of the VBM
             - "projections": The projections along sites and orbitals of the
             VBM if any projection data is available (else it is an empty
-            dictionnary). The format is similar to the projections field in
+            dictionary). The format is similar to the projections field in
             BandStructure: {spin:{'Orbital': [proj]}} where the array
             [proj] is ordered according to the sites in structure
         """
@@ -386,8 +386,8 @@ class BandStructure:
 
         list_ind_kpts = []
         if kpointvbm.label is not None:
-            for i in range(len(self.kpoints)):
-                if self.kpoints[i].label == kpointvbm.label:
+            for i, kpt in enumerate(self.kpoints):
+                if kpt.label == kpointvbm.label:
                     list_ind_kpts.append(i)
         else:
             list_ind_kpts.append(index)
@@ -428,7 +428,7 @@ class BandStructure:
             - "energy": The energy of the CBM
             - "projections": The projections along sites and orbitals of the
             CBM if any projection data is available (else it is an empty
-            dictionnary). The format is similar to the projections field in
+            dictionary). The format is similar to the projections field in
             BandStructure: {spin:{'Orbital': [proj]}} where the array
             [proj] is ordered according to the sites in structure
         """
@@ -453,8 +453,8 @@ class BandStructure:
 
         list_index_kpoints = []
         if kpointcbm.label is not None:
-            for i in range(len(self.kpoints)):
-                if self.kpoints[i].label == kpointcbm.label:
+            for i, kpt in enumerate(self.kpoints):
+                if kpt.label == kpointcbm.label:
                     list_index_kpoints.append(i)
         else:
             list_index_kpoints.append(index)
@@ -506,7 +506,7 @@ class BandStructure:
             [
                 str(c.label)
                 if c.label is not None
-                else str("(") + ",".join(["{0:.3f}".format(c.frac_coords[i]) for i in range(3)]) + str(")")
+                else "(" + ",".join([f"{c.frac_coords[i]:.3f}" for i in range(3)]) + ")"
                 for c in [vbm["kpoint"], cbm["kpoint"]]
             ]
         )
@@ -561,7 +561,7 @@ class BandStructure:
 
         Args:
             kpoint (1x3 array): coordinate of the k-point
-            cartesian (bool): kpoint is in cartesian or fractional coordinates
+            cartesian (bool): kpoint is in Cartesian or fractional coordinates
             tol (float): tolerance below which coordinates are considered equal
 
         Returns:
@@ -586,7 +586,7 @@ class BandStructure:
         Returns degeneracy of a given k-point based on structure symmetry
         Args:
             kpoint (1x3 array): coordinate of the k-point
-            cartesian (bool): kpoint is in cartesian or fractional coordinates
+            cartesian (bool): kpoint is in Cartesian or fractional coordinates
             tol (float): tolerance below which coordinates are considered equal
 
         Returns:
@@ -599,11 +599,11 @@ class BandStructure:
 
     def as_dict(self):
         """
-        Json-serializable dict representation of BandStructure.
+        JSON-serializable dict representation of BandStructure.
         """
         d = {
-            "@module": self.__class__.__module__,
-            "@class": self.__class__.__name__,
+            "@module": type(self).__module__,
+            "@class": type(self).__name__,
             "lattice_rec": self.lattice_rec.as_dict(),
             "efermi": self.efermi,
             "kpoints": [],
@@ -633,10 +633,10 @@ class BandStructure:
         d["labels_dict"] = {}
         d["is_spin_polarized"] = self.is_spin_polarized
 
-        # MongoDB does not accept keys starting with $. Add a blanck space to fix the problem
-        for c in self.labels_dict:
+        # MongoDB does not accept keys starting with $. Add a blank space to fix the problem
+        for c, label in self.labels_dict.items():
             mongo_key = c if not c.startswith("$") else " " + c
-            d["labels_dict"][mongo_key] = self.labels_dict[c].as_dict()["fcoords"]
+            d["labels_dict"][mongo_key] = label.as_dict()["fcoords"]
         d["projections"] = {}
         if len(self.projections) != 0:
             d["structure"] = self.structure.as_dict()
@@ -768,7 +768,7 @@ class BandStructureSymmLine(BandStructure, MSONable):
                 WITH a 2*pi coefficient
             efermi: fermi energy
             label_dict: (dict) of {} this link a kpoint (in frac coords or
-                cartesian coordinates depending on the coords).
+                Cartesian coordinates depending on the coords).
             coords_are_cartesian: Whether coordinates are cartesian.
             structure: The crystal structure (as a pymatgen Structure object)
                 associated with the band structure. This is needed if we
@@ -797,15 +797,13 @@ class BandStructureSymmLine(BandStructure, MSONable):
         previous_distance = 0.0
 
         previous_label = self.kpoints[0].label
-        for i in range(len(self.kpoints)):
-            label = self.kpoints[i].label
+        for i, kpt in enumerate(self.kpoints):
+            label = kpt.label
             if label is not None and previous_label is not None:
                 self.distance.append(previous_distance)
             else:
-                self.distance.append(
-                    np.linalg.norm(self.kpoints[i].cart_coords - previous_kpoint.cart_coords) + previous_distance
-                )
-            previous_kpoint = self.kpoints[i]
+                self.distance.append(np.linalg.norm(kpt.cart_coords - previous_kpoint.cart_coords) + previous_distance)
+            previous_kpoint = kpt
             previous_distance = self.distance[i]
             if label:
                 if previous_label:
@@ -851,8 +849,8 @@ class BandStructureSymmLine(BandStructure, MSONable):
             return [index]
 
         list_index_kpoints = []
-        for i in range(len(self.kpoints)):
-            if self.kpoints[i].label == self.kpoints[index].label:
+        for i, kpt in enumerate(self.kpoints):
+            if kpt.label == self.kpoints[index].label:
                 list_index_kpoints.append(i)
 
         return list_index_kpoints
@@ -947,7 +945,7 @@ class BandStructureSymmLine(BandStructure, MSONable):
 
     def as_dict(self):
         """
-        Json-serializable dict representation of BandStructureSymmLine.
+        JSON-serializable dict representation of BandStructureSymmLine.
         """
         d = super().as_dict()
         d["branches"] = self.branches
@@ -961,12 +959,12 @@ class LobsterBandStructureSymmLine(BandStructureSymmLine):
 
     def as_dict(self):
         """
-        Json-serializable dict representation of BandStructureSymmLine.
+        JSON-serializable dict representation of BandStructureSymmLine.
         """
 
         d = {
-            "@module": self.__class__.__module__,
-            "@class": self.__class__.__name__,
+            "@module": type(self).__module__,
+            "@class": type(self).__name__,
             "lattice_rec": self.lattice_rec.as_dict(),
             "efermi": self.efermi,
             "kpoints": [],
@@ -995,10 +993,10 @@ class LobsterBandStructureSymmLine(BandStructureSymmLine):
         d["band_gap"] = self.get_band_gap()
         d["labels_dict"] = {}
         d["is_spin_polarized"] = self.is_spin_polarized
-        # MongoDB does not accept keys starting with $. Add a blanck space to fix the problem
-        for c in self.labels_dict:
+        # MongoDB does not accept keys starting with $. Add a blank space to fix the problem
+        for c, label in self.labels_dict.items():
             mongo_key = c if not c.startswith("$") else " " + c
-            d["labels_dict"][mongo_key] = self.labels_dict[c].as_dict()["fcoords"]
+            d["labels_dict"][mongo_key] = label.as_dict()["fcoords"]
         if len(self.projections) != 0:
             d["structure"] = self.structure.as_dict()
             d["projections"] = {str(int(spin)): np.array(v).tolist() for spin, v in self.projections.items()}
@@ -1156,12 +1154,12 @@ def get_reconstructed_band_structure(list_bs, efermi=None):
         the type of the list_bs objects)
     """
     if efermi is None:
-        efermi = sum([b.efermi for b in list_bs]) / len(list_bs)
+        efermi = sum(b.efermi for b in list_bs) / len(list_bs)
 
     kpoints = []
     labels_dict = {}
     rec_lattice = list_bs[0].lattice_rec
-    nb_bands = min([list_bs[i].nb_bands for i in range(len(list_bs))])
+    nb_bands = min(list_bs[i].nb_bands for i in range(len(list_bs)))
 
     kpoints = np.concatenate([[k.frac_coords for k in bs.kpoints] for bs in list_bs])
     dicts = [bs.labels_dict for bs in list_bs]
