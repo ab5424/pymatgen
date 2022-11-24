@@ -33,7 +33,7 @@ class SymmOp(MSONable):
         A 4x4 numpy.array representing the symmetry operation.
     """
 
-    def __init__(self, affine_transformation_matrix: ArrayLike, tol=0.01):
+    def __init__(self, affine_transformation_matrix: ArrayLike, tol: float = 0.01):
         """
         Initializes the SymmOp from a 4x4 affine transformation matrix.
         In general, this constructor should not be used unless you are
@@ -80,14 +80,16 @@ class SymmOp(MSONable):
         affine_matrix[0:3][:, 3] = translation_vec
         return SymmOp(affine_matrix, tol)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SymmOp):
+            return NotImplemented
         return np.allclose(self.affine_matrix, other.affine_matrix, atol=self.tol)
 
     def __hash__(self):
         return 7
 
     def __repr__(self):
-        return self.__str__()
+        return str(self)
 
     def __str__(self):
         output = [
@@ -203,7 +205,6 @@ class SymmOp(MSONable):
         Returns:
             (are_related, is_reversed)
         """
-
         from_c = self.operate(from_a)
         to_c = self.operate(to_a)
 
@@ -524,7 +525,9 @@ class MagSymmOp(SymmOp):
             raise Exception(f"Time reversal operator not well defined: {time_reversal}, {type(time_reversal)}")
         self.time_reversal = time_reversal
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SymmOp):
+            return NotImplemented
         return np.allclose(self.affine_matrix, other.affine_matrix, atol=self.tol) and (
             self.time_reversal == other.time_reversal
         )
@@ -546,7 +549,7 @@ class MagSymmOp(SymmOp):
     def __hash__(self):
         # useful for obtaining a set of unique MagSymmOps
         hashable_value = tuple(self.affine_matrix.flatten()) + (self.time_reversal,)
-        return hashable_value.__hash__()
+        return hash(hashable_value)
 
     def operate_magmom(self, magmom):
         """
@@ -563,7 +566,6 @@ class MagSymmOp(SymmOp):
         Returns:
             Magnetic moment after operator applied as Magmom class
         """
-
         magmom = Magmom(magmom)  # type casting to handle lists as input
 
         transformed_moment = (
@@ -635,7 +637,7 @@ class MagSymmOp(SymmOp):
         '-y+1/2, x+1/2, z+1/2, +1', etc. Only works for integer rotation matrices
         """
         xyzt_string = SymmOp.as_xyz_string(self)
-        return xyzt_string + f", {self.time_reversal:+}"
+        return f"{xyzt_string}, {self.time_reversal:+}"
 
     def as_dict(self) -> dict:
         """

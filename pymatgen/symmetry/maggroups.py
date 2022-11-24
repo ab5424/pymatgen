@@ -5,6 +5,8 @@
 Magnetic space groups.
 """
 
+from __future__ import annotations
+
 import os
 import sqlite3
 import textwrap
@@ -14,6 +16,7 @@ from fractions import Fraction
 import numpy as np
 from monty.design_patterns import cached_class
 
+from pymatgen.core.lattice import Lattice
 from pymatgen.core.operations import MagSymmOp
 from pymatgen.electronic_structure.core import Magmom
 from pymatgen.symmetry.groups import SymmetryGroup, in_array_list
@@ -92,8 +95,8 @@ class MagneticSpaceGroup(SymmetryGroup):
         information on magnetic symmetry.
 
         :param id: BNS number supplied as list of 2 ints or BNS label as
-            str or index as int (1-1651) to iterate over all space groups"""
-
+            str or index as int (1-1651) to iterate over all space groups
+        """
         self._data = {}
 
         # Datafile is stored as sqlite3 database since (a) it can be easily
@@ -163,8 +166,10 @@ class MagneticSpaceGroup(SymmetryGroup):
                     time_reversal=time_reversal,
                 )
                 # store string representation, e.g. (2x|1/2,1/2,1/2)'
-                seitz = f"({point_operator['symbol']}|" \
-                        f"{Fraction(translation_vec[0])},{Fraction(translation_vec[1])},{Fraction(translation_vec[2])})"
+                seitz = (
+                    f"({point_operator['symbol']}|"
+                    f"{Fraction(translation_vec[0])},{Fraction(translation_vec[1])},{Fraction(translation_vec[2])})"
+                )
                 if time_reversal == -1:
                     seitz += "'"
                 symops.append({"op": op, "str": seitz})
@@ -204,8 +209,10 @@ class MagneticSpaceGroup(SymmetryGroup):
                         [s[15], s[18], s[21]],
                     ]
                     # store string representation, e.g. (x,y,z;mx,my,mz)
-                    wyckoff_str = f"({transformation_to_string(matrix, translation_vec)};" \
-                                  f"{transformation_to_string(matrix_magmom, c='m')})"
+                    wyckoff_str = (
+                        f"({transformation_to_string(matrix, translation_vec)};"
+                        f"{transformation_to_string(matrix_magmom, c='m')})"
+                    )
                     sites.append(
                         {
                             "translation_vec": translation_vec,
@@ -236,8 +243,8 @@ class MagneticSpaceGroup(SymmetryGroup):
                     {
                         "vector": [r[0] / r[3], r[1] / r[3], r[2] / r[3]],
                         "str": f"({Fraction(r[0] / r[3]).limit_denominator()},"
-                               f"{Fraction(r[1] / r[3]).limit_denominator()},"
-                               f"{Fraction(r[2] / r[3]).limit_denominator()})+"
+                        f"{Fraction(r[1] / r[3]).limit_denominator()},"
+                        f"{Fraction(r[2] / r[3]).limit_denominator()})+",
                     }
                 )
 
@@ -253,9 +260,11 @@ class MagneticSpaceGroup(SymmetryGroup):
             p = [b[9] / b[12], b[10] / b[12], b[11] / b[12]]
             P = np.array(P).transpose()
             P_string = transformation_to_string(P, components=("a", "b", "c"))
-            p_string = f"{Fraction(p[0]).limit_denominator()}," \
-                       f"{Fraction(p[1]).limit_denominator()}," \
-                       f"{Fraction(p[2]).limit_denominator()}"
+            p_string = (
+                f"{Fraction(p[0]).limit_denominator()},"
+                f"{Fraction(p[1]).limit_denominator()},"
+                f"{Fraction(p[2]).limit_denominator()}"
+            )
             return P_string + ";" + p_string
 
         for i in range(8, 15):
@@ -284,7 +293,6 @@ class MagneticSpaceGroup(SymmetryGroup):
             or OG label as str
         :return:
         """
-
         db = sqlite3.connect(MAGSYMM_DATA)
         c = db.cursor()
         if isinstance(id, str):
@@ -299,7 +307,9 @@ class MagneticSpaceGroup(SymmetryGroup):
 
         return cls(bns_label)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, type(self)):
+            return NotImplemented
         return self._data == other._data
 
     @property
@@ -359,7 +369,7 @@ class MagneticSpaceGroup(SymmetryGroup):
 
         return ops
 
-    def get_orbit(self, p, m, tol=1e-5):
+    def get_orbit(self, p, magmom, tol: float = 1e-5):
         """
         Returns the orbit for a point and its associated magnetic moment.
 
@@ -372,21 +382,21 @@ class MagneticSpaceGroup(SymmetryGroup):
                 (and also needed for symbolic orbits).
 
         Returns:
-            (([array], [array])) Tuple of orbit for point and magnetic moments for orbit.
+            tuple[list, list]: orbit for point and magnetic moments for orbit.
         """
-        orbit = []
+        orbit: list[np.ndarray] = []
         orbit_magmoms = []
-        m = Magmom(m)
-        for o in self.symmetry_ops:
-            pp = o.operate(p)
+        magmom = Magmom(magmom)
+        for sym_op in self.symmetry_ops:
+            pp = sym_op.operate(p)
             pp = np.mod(np.round(pp, decimals=10), 1)
-            mm = o.operate_magmom(m)
+            mm = sym_op.operate_magmom(magmom)
             if not in_array_list(orbit, pp, tol=tol):
                 orbit.append(pp)
                 orbit_magmoms.append(mm)
         return orbit, orbit_magmoms
 
-    def is_compatible(self, lattice, tol=1e-5, angle_tol=5):
+    def is_compatible(self, lattice: Lattice, tol: float = 1e-5, angle_tol: float = 5) -> bool:
         """
         Checks whether a particular lattice is compatible with the
         *conventional* unit cell.
@@ -396,6 +406,9 @@ class MagneticSpaceGroup(SymmetryGroup):
             tol (float): The tolerance to check for equality of lengths.
             angle_tol (float): The tolerance to check for equality of angles
                 in degrees.
+
+        Returns:
+            bool: True if the lattice is compatible with the conventional cell.
         """
         # function from pymatgen.symmetry.groups.SpaceGroup
         abc = lattice.lengths
@@ -428,7 +441,6 @@ class MagneticSpaceGroup(SymmetryGroup):
         Get description of all data, including information for OG setting.
         :return: str
         """
-
         # __str__() omits information on OG setting to reduce confusion
         # as to which set of symops are active, this property gives
         # all stored data including OG setting

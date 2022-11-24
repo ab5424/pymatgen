@@ -7,6 +7,8 @@ strains, including applying those deformations to structure objects and
 generating deformed structure sets for further calculations.
 """
 
+from __future__ import annotations
+
 import collections
 import itertools
 
@@ -14,6 +16,7 @@ import numpy as np
 import scipy
 
 from pymatgen.core.lattice import Lattice
+from pymatgen.core.structure import Structure
 from pymatgen.core.tensors import SquareTensor, symmetry_reduce
 
 __author__ = "Joseph Montoya"
@@ -46,13 +49,13 @@ class Deformation(SquareTensor):
         obj = super().__new__(cls, deformation_gradient)
         return obj.view(cls)
 
-    def is_independent(self, tol=1e-8):
+    def is_independent(self, tol: float = 1e-8):
         """
-        checks to determine whether the deformation is independent
+        Checks to determine whether the deformation is independent
         """
         return len(self.get_perturbed_indices(tol)) == 1
 
-    def get_perturbed_indices(self, tol=1e-8):
+    def get_perturbed_indices(self, tol: float = 1e-8):
         """
         Gets indices of perturbed elements of the deformation gradient,
         i. e. those that differ from the identity
@@ -63,8 +66,7 @@ class Deformation(SquareTensor):
     @property
     def green_lagrange_strain(self):
         """
-        calculates the euler-lagrange strain from
-        the deformation gradient
+        Calculates the Euler-Lagrange strain from the deformation gradient
         """
         return Strain.from_deformation(self)
 
@@ -105,7 +107,7 @@ class DeformedStructureSet(collections.abc.Sequence):
     can be used to calculate linear stress-strain response
     """
 
-    def __init__(self, structure, norm_strains=None, shear_strains=None, symmetry=False):
+    def __init__(self, structure: Structure, norm_strains=None, shear_strains=None, symmetry=False):
         """
         constructs the deformed geometries of a structure. Generates
         m + n deformed structures according to the supplied parameters.
@@ -122,8 +124,8 @@ class DeformedStructureSet(collections.abc.Sequence):
         shear_strains = shear_strains or [-0.06, -0.03, 0.03, 0.06]
 
         self.undeformed_structure = structure
-        self.deformations = []
-        self.def_structs = []
+        self.deformations: list[Deformation] = []
+        self.def_structs: list[Structure] = []
 
         # Generate deformations
         for ind in [(0, 0), (1, 1), (2, 2)]:
@@ -139,7 +141,7 @@ class DeformedStructureSet(collections.abc.Sequence):
         # Perform symmetry reduction if specified
         if symmetry:
             self.sym_dict = symmetry_reduce(self.deformations, structure)
-            self.deformations = list(self.sym_dict.keys())
+            self.deformations = list(self.sym_dict)
         self.deformed_structures = [defo.apply_to_structure(structure) for defo in self.deformations]
 
     def __iter__(self):

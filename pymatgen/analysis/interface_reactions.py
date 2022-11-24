@@ -9,14 +9,13 @@ Please consider citing one or both of the following papers if you use this
 code in your own work.
 
 References:
-
     (1) Richards, W. D., Miara, L. J., Wang, Y., Kim, J. C., &amp; Ceder, G. (2015).
     Interface stability in solid-state batteries. Chemistry of Materials, 28(1),
-    266–273. https://doi.org/10.1021/acs.chemmater.5b04082
+    266-273. https://doi.org/10.1021/acs.chemmater.5b04082
 
     (2) Xiao, Y., Wang, Y., Bo, S.-H., Kim, J. C., Miara, L. J., &amp; Ceder, G. (2019).
     Understanding interface stability in solid-state batteries.
-    Nature Reviews Materials, 5(2), 105–126. https://doi.org/10.1038/s41578-019-0157-5
+    Nature Reviews Materials, 5(2), 105-126. https://doi.org/10.1038/s41578-019-0157-5
 
 """
 
@@ -62,11 +61,11 @@ class InterfacialReactivity(MSONable):
     References:
         Richards, W. D., Miara, L. J., Wang, Y., Kim, J. C., &amp; Ceder, G. (2015).
         Interface stability in solid-state batteries. Chemistry of Materials, 28(1),
-        266–273. https://doi.org/10.1021/acs.chemmater.5b04082
+        266-273. https://doi.org/10.1021/acs.chemmater.5b04082
 
         Xiao, Y., Wang, Y., Bo, S.-H., Kim, J. C., Miara, L. J., &amp; Ceder, G. (2019).
         Understanding interface stability in solid-state batteries.
-        Nature Reviews Materials, 5(2), 105–126.
+        Nature Reviews Materials, 5(2), 105-126.
         https://doi.org/10.1038/s41578-019-0157-5
     """
 
@@ -173,7 +172,7 @@ class InterfacialReactivity(MSONable):
             for i in reversed(critical_comp):
                 # Gets mixing ratio x at kinks.
                 c = self.pd.pd_coords(i)
-                x = np.linalg.norm(c - c2_coord) / np.linalg.norm(c1_coord - c2_coord)
+                x = float(np.linalg.norm(c - c2_coord) / np.linalg.norm(c1_coord - c2_coord))
                 # Modifies mixing ratio in case compositions self.comp1 and
                 # self.comp2 are not normalized.
                 x = x * n2 / (n1 + x * (n2 - n1))
@@ -207,7 +206,6 @@ class InterfacialReactivity(MSONable):
         Returns:
             Plot of reaction energies as a function of mixing ratio
         """
-
         if backend.lower() == "plotly":
             fig = self._get_plotly_figure()
         elif backend.lower() in ["matplotlib", "mpl", "plt"]:
@@ -363,7 +361,7 @@ class InterfacialReactivity(MSONable):
         rxn_min = reactions.pop(min_idx)
 
         labels = [
-            rf"{htmlify(str(r))} <br>" + "\u0394" + f"E<sub>rxn</sub> = {round(e, 3)} eV/atom"  # type: ignore
+            f"{htmlify(str(r))} <br>\u0394E<sub>rxn</sub> = {round(e, 3)} eV/atom"  # type: ignore
             for r, e in zip(reactions, energy)
         ]
 
@@ -383,9 +381,7 @@ class InterfacialReactivity(MSONable):
             hoverlabel=dict(bgcolor="navy"),
         )
 
-        min_label = (
-            rf"{htmlify(str(rxn_min))} <br>" + "\u0394" + f"E<sub>rxn</sub> = {round(e_min, 3)} eV/atom"  # type: ignore
-        )
+        min_label = f"{htmlify(str(rxn_min))} <br>\u0394E<sub>rxn</sub> = {round(e_min, 3)} eV/atom"  # type: ignore
 
         minimum = Scatter(
             x=[x_min],
@@ -665,7 +661,6 @@ class GrandPotentialInterfacialReactivity(InterfacialReactivity):
                 composition, convex hull energy will be used associated with a
                 warning message.
         """
-
         if not isinstance(grand_pd, GrandPotentialPhaseDiagram):
             raise ValueError("Please use the InterfacialReactivity class if using a regular phase diagram!")
 
