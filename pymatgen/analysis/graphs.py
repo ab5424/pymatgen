@@ -4,6 +4,7 @@
 """
 Module for graph representations of crystals and molecules.
 """
+from __future__ import annotations
 
 import copy
 import logging
@@ -110,7 +111,7 @@ class StructureGraph(MSONable):
     kind of information that connects two Sites.
     """
 
-    def __init__(self, structure, graph_data=None):
+    def __init__(self, structure: Structure, graph_data=None):
         """
         If constructing this class manually, use the `with_empty_graph`
         method or `with_local_env_strategy` method (using an algorithm
@@ -137,7 +138,6 @@ class StructureGraph(MSONable):
             dict format (not intended to be constructed manually,
         see as_dict method for format)
         """
-
         if isinstance(structure, StructureGraph):
             # just make a copy from input
             graph_data = structure.as_dict()["graphs"]
@@ -147,7 +147,7 @@ class StructureGraph(MSONable):
 
         # tidy up edge attr dicts, reading to/from json duplicates
         # information
-        for u, v, k, d in self.graph.edges(keys=True, data=True):
+        for _, _, _, d in self.graph.edges(keys=True, data=True):
             if "id" in d:
                 del d["id"]
             if "key" in d:
@@ -161,7 +161,13 @@ class StructureGraph(MSONable):
                 d["from_jimage"] = tuple(d["from_jimage"])
 
     @classmethod
-    def with_empty_graph(cls, structure, name="bonds", edge_weight_name=None, edge_weight_units=None):
+    def with_empty_graph(
+        cls,
+        structure: Structure,
+        name="bonds",
+        edge_weight_name=None,
+        edge_weight_units=None,
+    ):
         """
         Constructor for StructureGraph, returns a StructureGraph
         object with an empty graph (no edges, only nodes defined
@@ -175,7 +181,6 @@ class StructureGraph(MSONable):
             e.g. "Å" or "eV"
         :return (StructureGraph):
         """
-
         if edge_weight_name and (edge_weight_units is None):
             raise ValueError(
                 "Please specify units associated "
@@ -212,7 +217,6 @@ class StructureGraph(MSONable):
             specified.
         :return: sg, a StructureGraph
         """
-
         sg = StructureGraph.with_empty_graph(structure, name="bonds", edge_weight_name="weight", edge_weight_units="")
 
         for edge, props in edges.items():
@@ -226,7 +230,7 @@ class StructureGraph(MSONable):
                 raise ValueError("Edges must be given as (from_index, to_index, from_image, to_image) tuples")
 
             if props is not None:
-                if "weight" in props.keys():
+                if "weight" in props:
                     weight = props["weight"]
                     del props["weight"]
                 else:
@@ -256,19 +260,19 @@ class StructureGraph(MSONable):
         return sg
 
     @staticmethod
-    def with_local_env_strategy(structure, strategy, weights=False):
+    def with_local_env_strategy(structure, strategy, weights=False, edge_properties=False):
         """
         Constructor for StructureGraph, using a strategy
-        from :Class: `pymatgen.analysis.local_env`.
+        from :class:`pymatgen.analysis.local_env`.
 
         :param structure: Structure object
         :param strategy: an instance of a
-            :Class: `pymatgen.analysis.local_env.NearNeighbors` object
+            :class:`pymatgen.analysis.local_env.NearNeighbors` object
         :param weights: if True, use weights from local_env class
             (consult relevant class for their meaning)
+        :param edge_properties: if True, edge_properties from neighbors will be used
         :return:
         """
-
         if not strategy.structures_allowed:
             raise ValueError("Chosen strategy is not designed for use with structures! Please choose another strategy.")
 
@@ -280,14 +284,26 @@ class StructureGraph(MSONable):
                 # for any one bond, one from site u to site v
                 # and another form site v to site u: this is
                 # harmless, so warn_duplicates=False
-                sg.add_edge(
-                    from_index=n,
-                    from_jimage=(0, 0, 0),
-                    to_index=neighbor["site_index"],
-                    to_jimage=neighbor["image"],
-                    weight=neighbor["weight"] if weights else None,
-                    warn_duplicates=False,
-                )
+                if edge_properties:
+                    sg.add_edge(
+                        from_index=n,
+                        from_jimage=(0, 0, 0),
+                        to_index=neighbor["site_index"],
+                        to_jimage=neighbor["image"],
+                        weight=neighbor["weight"] if weights else None,
+                        edge_properties=neighbor["edge_properties"],
+                        warn_duplicates=False,
+                    )
+                else:
+                    sg.add_edge(
+                        from_index=n,
+                        from_jimage=(0, 0, 0),
+                        to_index=neighbor["site_index"],
+                        to_jimage=neighbor["image"],
+                        weight=neighbor["weight"] if weights else None,
+                        edge_properties=None,
+                        warn_duplicates=False,
+                    )
 
         return sg
 
@@ -329,7 +345,7 @@ class StructureGraph(MSONable):
         between sites) doesn't have a direction, from_index,
         from_jimage can be swapped with to_index, to_jimage.
 
-        However, images will always always be shifted so that
+        However, images will always be shifted so that
         from_index < to_index and from_jimage becomes (0, 0, 0).
 
         :param from_index: index of site connecting from
@@ -345,7 +361,6 @@ class StructureGraph(MSONable):
             store on graph edges, similar to Structure's site_properties
         :return:
         """
-
         # this is not necessary for the class to work, but
         # just makes it neater
         if to_index < from_index:
@@ -421,7 +436,7 @@ class StructureGraph(MSONable):
         # (site, jimage) pair
         existing_edge_data = self.graph.get_edge_data(from_index, to_index)
         if existing_edge_data:
-            for key, d in existing_edge_data.items():
+            for d in existing_edge_data.values():
                 if d["to_jimage"] == to_jimage:
                     if warn_duplicates:
                         warnings.warn(
@@ -435,7 +450,13 @@ class StructureGraph(MSONable):
         edge_properties = edge_properties or {}
 
         if weight:
-            self.graph.add_edge(from_index, to_index, to_jimage=to_jimage, weight=weight, **edge_properties)
+            self.graph.add_edge(
+                from_index,
+                to_index,
+                to_jimage=to_jimage,
+                weight=weight,
+                **edge_properties,
+            )
         else:
             self.graph.add_edge(from_index, to_index, to_jimage=to_jimage, **edge_properties)
 
@@ -470,7 +491,6 @@ class StructureGraph(MSONable):
             "weight" and a "properties" key.
         :return:
         """
-
         self.structure.insert(
             i,
             species,
@@ -512,7 +532,6 @@ class StructureGraph(MSONable):
 
         :return:
         """
-
         species = {}
         coords = {}
         properties = {}
@@ -550,7 +569,6 @@ class StructureGraph(MSONable):
             it should be a dictionary of edge properties to be changed.
         :return:
         """
-
         existing_edges = self.graph.get_edge_data(from_index, to_index)
 
         # ensure that edge exists before attempting to change it
@@ -570,7 +588,7 @@ class StructureGraph(MSONable):
             self.graph[from_index][to_index][edge_index]["weight"] = new_weight
 
         if new_edge_properties is not None:
-            for prop in list(new_edge_properties.keys()):
+            for prop in list(new_edge_properties):
                 self.graph[from_index][to_index][edge_index][prop] = new_edge_properties[prop]
 
     def break_edge(self, from_index, to_index, to_jimage=None, allow_reverse=False):
@@ -585,7 +603,6 @@ class StructureGraph(MSONable):
             will attempt to break (to_index, from_index).
         :return:
         """
-
         # ensure that edge exists before attempting to remove it
         existing_edges = self.graph.get_edge_data(from_index, to_index)
         existing_reverse = None
@@ -612,10 +629,8 @@ class StructureGraph(MSONable):
                 self.graph.remove_edge(to_index, from_index, edge_index)
             else:
                 raise ValueError(
-                    "Edge cannot be broken between {} and {};\
-                                no edge exists between those sites.".format(
-                        from_index, to_index
-                    )
+                    f"Edge cannot be broken between {from_index} and {to_index}; "
+                    f"no edge exists between those sites."
                 )
 
     def remove_nodes(self, indices):
@@ -626,7 +641,6 @@ class StructureGraph(MSONable):
             be removed.
         :return:
         """
-
         self.structure.remove_sites(indices)
         self.graph.remove_nodes_from(indices)
 
@@ -712,16 +726,16 @@ class StructureGraph(MSONable):
         func_grp.remove_species("X")
 
         if graph_dict is not None:
-            for (u, v) in graph_dict.keys():
+            for (u, v) in graph_dict:
                 edge_props = graph_dict[(u, v)]
-                if "to_jimage" in edge_props.keys():
+                if "to_jimage" in edge_props:
                     to_jimage = edge_props["to_jimage"]
                     del edge_props["to_jimage"]
                 else:
                     # By default, assume that all edges should stay remain
                     # inside the initial image
                     to_jimage = (0, 0, 0)
-                if "weight" in edge_props.keys():
+                if "weight" in edge_props:
                     weight = edge_props["weight"]
                     del edge_props["weight"]
                 self.add_edge(
@@ -762,7 +776,6 @@ class StructureGraph(MSONable):
         :return: list of ConnectedSite tuples,
             sorted by closest first
         """
-
         connected_sites = set()
         connected_site_images = set()
 
@@ -864,7 +877,6 @@ class StructureGraph(MSONable):
             or "fdp" (for more crowded graphs) usually give good outputs
         :return:
         """
-
         if not which(algo):
             raise RuntimeError("StructureGraph graph drawing requires GraphViz binaries to be in the path.")
 
@@ -872,7 +884,7 @@ class StructureGraph(MSONable):
         # graphs using matplotlib, these also work here. However,
         # a dedicated tool like GraphViz allows for much easier
         # control over graph appearance and also correctly displays
-        # mutli-graphs (matplotlib can superimpose multiple edges).
+        # multi-graphs (matplotlib can superimpose multiple edges).
 
         g = self.graph.copy()
 
@@ -1018,7 +1030,6 @@ class StructureGraph(MSONable):
         :return: A dict with an 'all_weights' list, 'minimum',
             'maximum', 'median', 'mean', 'std_dev'
         """
-
         all_weights = [d.get("weight", None) for u, v, d in self.graph.edges(data=True)]
         stats = describe(all_weights, nan_policy="omit")
 
@@ -1040,7 +1051,6 @@ class StructureGraph(MSONable):
         :return: a list of co-ordination environments,
             e.g. ['Mo-S(6)', 'S-Mo(3)']
         """
-
         motifs = set()
         for idx, site in enumerate(self.structure):
 
@@ -1074,11 +1084,10 @@ class StructureGraph(MSONable):
 
     def as_dict(self):
         """
-        As in :Class: `pymatgen.core.Structure` except
+        As in :class:`pymatgen.core.Structure` except
         with using `to_dict_of_dicts` from NetworkX
         to store graph information.
         """
-
         d = {
             "@module": type(self).__module__,
             "@class": type(self).__name__,
@@ -1091,7 +1100,7 @@ class StructureGraph(MSONable):
     @classmethod
     def from_dict(cls, d):
         """
-        As in :Class: `pymatgen.core.Structure` except
+        As in :class:`pymatgen.core.Structure` except
         restoring graphs using `from_dict_of_dicts`
         from NetworkX to restore graph information.
         """
@@ -1110,7 +1119,6 @@ class StructureGraph(MSONable):
         :param scaling_matrix: same as Structure.__mul__
         :return:
         """
-
         # Developer note: a different approach was also trialed, using
         # a simple Graph (instead of MultiDiGraph), with node indices
         # representing both site index and periodic image. Here, the
@@ -1150,7 +1158,7 @@ class StructureGraph(MSONable):
             # create a map of nodes from original graph to its image
             mapping = {n: n + len(new_sites) for n in range(len(self.structure))}
 
-            for idx, site in enumerate(self.structure):
+            for site in self.structure:
                 s = PeriodicSite(
                     site.species,
                     site.coords + v,
@@ -1292,8 +1300,8 @@ class StructureGraph(MSONable):
         logger.debug(f"Removing {len(edges_to_remove)} edges, adding {len(edges_to_add)} new edges.")
 
         # add/delete marked edges
-        for edges_to_remove in edges_to_remove:
-            new_g.remove_edge(*edges_to_remove)
+        for edge in edges_to_remove:
+            new_g.remove_edge(*edge)
         for (u, v, d) in edges_to_add:
             new_g.add_edge(u, v, **d)
 
@@ -1338,9 +1346,7 @@ class StructureGraph(MSONable):
 
         if print_weights:
             for u, v, data in edges:
-                s += "{:4}  {:4}  {:12}  {:.3e}\n".format(
-                    u, v, str(data.get("to_jimage", (0, 0, 0))), data.get("weight", 0)
-                )
+                s += f"{u:4}  {v:4}  {str(data.get('to_jimage', (0, 0, 0))):12}  {data.get('weight', 0):.3e}\n"
         else:
             for u, v, data in edges:
                 s += f"{u:4}  {v:4}  {str(data.get('to_jimage', (0, 0, 0))):12}\n"
@@ -1349,7 +1355,7 @@ class StructureGraph(MSONable):
 
     def __str__(self):
         s = "Structure Graph"
-        s += f"\nStructure: \n{self.structure.__str__()}"
+        s += f"\nStructure: \n{self.structure}"
         s += f"\nGraph: {self.name}\n"
         s += self._edges_to_string(self.graph)
         return s
@@ -1374,7 +1380,6 @@ class StructureGraph(MSONable):
         :param reverse:
         :return:
         """
-
         old_structure = self.structure.copy()
 
         # sort Structure
@@ -1403,7 +1408,7 @@ class StructureGraph(MSONable):
     def __copy__(self):
         return StructureGraph.from_dict(self.as_dict())
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """
         Two StructureGraphs are equal if they have equal Structures,
         and have the same edges between Sites. Edge weights can be
@@ -1412,7 +1417,8 @@ class StructureGraph(MSONable):
         :param other: StructureGraph
         :return (bool):
         """
-
+        if not isinstance(other, StructureGraph):
+            return NotImplemented
         # sort for consistent node indices
         # PeriodicSite should have a proper __hash__() value,
         # using its frac_coords as a convenient key
@@ -1453,7 +1459,6 @@ class StructureGraph(MSONable):
             number of occurrences of bonds
         :return:
         """
-
         if self.structure != other.structure and strict:
             return ValueError("Meaningless to compare StructureGraphs if corresponding Structures are different.")
 
@@ -1512,7 +1517,6 @@ class StructureGraph(MSONable):
 
         :return: list of unique Molecules in Structure
         """
-
         # creating a supercell is an easy way to extract
         # molecules (and not, e.g., layers of a 2D crystal)
         # without adding extra logic
@@ -1612,7 +1616,6 @@ class MoleculeGraph(MSONable):
             dict format (not intended to be constructed manually,
             see as_dict method for format)
         """
-
         if isinstance(molecule, MoleculeGraph):
             # just make a copy from input
             graph_data = molecule.as_dict()["graphs"]
@@ -1622,7 +1625,7 @@ class MoleculeGraph(MSONable):
 
         # tidy up edge attr dicts, reading to/from json duplicates
         # information
-        for u, v, k, d in self.graph.edges(keys=True, data=True):
+        for _, _, _, d in self.graph.edges(keys=True, data=True):
             if "id" in d:
                 del d["id"]
             if "key" in d:
@@ -1652,7 +1655,6 @@ class MoleculeGraph(MSONable):
             e.g. "Å" or "eV"
         :return (MoleculeGraph):
         """
-
         if edge_weight_name and (edge_weight_units is None):
             raise ValueError(
                 "Please specify units associated "
@@ -1688,7 +1690,6 @@ class MoleculeGraph(MSONable):
             additional properties are to be specified.
         :return: mg, a MoleculeGraph
         """
-
         mg = MoleculeGraph.with_empty_graph(molecule, name="bonds", edge_weight_name="weight", edge_weight_units="")
 
         for edge, props in edges.items():
@@ -1700,7 +1701,7 @@ class MoleculeGraph(MSONable):
                 raise ValueError("Edges must be given as (from_index, to_index) tuples")
 
             if props is not None:
-                if "weight" in props.keys():
+                if "weight" in props:
                     weight = props["weight"]
                     del props["weight"]
                 else:
@@ -1726,14 +1727,13 @@ class MoleculeGraph(MSONable):
     def with_local_env_strategy(molecule, strategy):
         """
         Constructor for MoleculeGraph, using a strategy
-        from :Class: `pymatgen.analysis.local_env`.
+        from :class:`pymatgen.analysis.local_env`.
 
         :param molecule: Molecule object
         :param strategy: an instance of a
-            :Class: `pymatgen.analysis.local_env.NearNeighbors` object
+            :class:`pymatgen.analysis.local_env.NearNeighbors` object
         :return: mg, a MoleculeGraph
         """
-
         if not strategy.molecules_allowed:
             raise ValueError("Chosen strategy is not designed for use with molecules! Please choose another strategy.")
         extend_structure = strategy.extend_structure_molecules
@@ -1827,7 +1827,7 @@ class MoleculeGraph(MSONable):
         between sites) doesn't have a direction, from_index,
         from_jimage can be swapped with to_index, to_jimage.
 
-        However, images will always always be shifted so that
+        However, images will always be shifted so that
         from_index < to_index and from_jimage becomes (0, 0, 0).
 
         :param from_index: index of site connecting from
@@ -1840,7 +1840,6 @@ class MoleculeGraph(MSONable):
             store on graph edges, similar to Structure's site_properties
         :return:
         """
-
         # this is not necessary for the class to work, but
         # just makes it neater
         if to_index < from_index:
@@ -1894,7 +1893,6 @@ class MoleculeGraph(MSONable):
             "weight" and a "properties" key.
         :return:
         """
-
         self.molecule.insert(
             i,
             species,
@@ -1933,7 +1931,6 @@ class MoleculeGraph(MSONable):
 
         :return:
         """
-
         species = {}
         coords = {}
         properties = {}
@@ -1963,16 +1960,12 @@ class MoleculeGraph(MSONable):
             it should be a dictionary of edge properties to be changed.
         :return:
         """
-
         existing_edge = self.graph.get_edge_data(from_index, to_index)
 
         # ensure that edge exists before attempting to change it
         if not existing_edge:
             raise ValueError(
-                "Edge between {} and {} cannot be altered;\
-                                no edge exists between those sites.".format(
-                    from_index, to_index
-                )
+                f"Edge between {from_index} and {to_index} cannot be altered; " f"no edge exists between those sites."
             )
 
         # Third index should always be 0 because there should only be one edge between any two nodes
@@ -1980,7 +1973,7 @@ class MoleculeGraph(MSONable):
             self.graph[from_index][to_index][0]["weight"] = new_weight
 
         if new_edge_properties is not None:
-            for prop in list(new_edge_properties.keys()):
+            for prop in new_edge_properties:
                 self.graph[from_index][to_index][0][prop] = new_edge_properties[prop]
 
     def break_edge(self, from_index, to_index, allow_reverse=False):
@@ -1994,7 +1987,6 @@ class MoleculeGraph(MSONable):
             will attempt to break (to_index, from_index).
         :return:
         """
-
         # ensure that edge exists before attempting to remove it
         existing_edge = self.graph.get_edge_data(from_index, to_index)
         existing_reverse = None
@@ -2010,10 +2002,8 @@ class MoleculeGraph(MSONable):
                 self.graph.remove_edge(to_index, from_index)
             else:
                 raise ValueError(
-                    "Edge cannot be broken between {} and {};\
-                                no edge exists between those sites.".format(
-                        from_index, to_index
-                    )
+                    f"Edge cannot be broken between {from_index} and {to_index}; "
+                    f"no edge exists between those sites."
                 )
 
     def remove_nodes(self, indices):
@@ -2024,7 +2014,6 @@ class MoleculeGraph(MSONable):
             be removed.
         :return:
         """
-
         self.molecule.remove_sites(indices)
         self.graph.remove_nodes_from(indices)
 
@@ -2049,7 +2038,6 @@ class MoleculeGraph(MSONable):
         returns two or more new MoleculeGraph objects.
         :return: list of MoleculeGraphs
         """
-
         if nx.is_weakly_connected(self.graph):
             return [copy.deepcopy(self)]
 
@@ -2086,7 +2074,7 @@ class MoleculeGraph(MSONable):
 
             properties = {}
             for prop_set in raw_props.values():
-                for prop in prop_set.keys():
+                for prop in prop_set:
                     if prop in properties:
                         properties[prop].append(prop_set[prop])
                     else:
@@ -2135,7 +2123,6 @@ class MoleculeGraph(MSONable):
             will attempt to break (to_index, from_index).
         :return: list of MoleculeGraphs
         """
-
         self.set_node_attributes()
         original = copy.deepcopy(self)
 
@@ -2150,7 +2137,7 @@ class MoleculeGraph(MSONable):
 
         # alter any bonds before partition, to avoid remapping
         if alterations is not None:
-            for (u, v) in alterations.keys():
+            for (u, v) in alterations:
                 if "weight" in alterations[(u, v)]:
                     weight = alterations[(u, v)]["weight"]
                     del alterations[(u, v)]["weight"]
@@ -2304,7 +2291,7 @@ class MoleculeGraph(MSONable):
             for (u, v) in list(func_grp.graph.edges()):
                 edge_props = func_grp.graph.get_edge_data(u, v)[0]
                 weight = None
-                if "weight" in edge_props.keys():
+                if "weight" in edge_props:
                     weight = edge_props["weight"]
                     del edge_props["weight"]
                 self.add_edge(mapping[u], mapping[v], weight=weight, edge_properties=edge_props)
@@ -2326,9 +2313,9 @@ class MoleculeGraph(MSONable):
             func_grp.remove_species("X")
 
             if graph_dict is not None:
-                for (u, v) in graph_dict.keys():
+                for (u, v) in graph_dict:
                     edge_props = graph_dict[(u, v)]
-                    if "weight" in edge_props.keys():
+                    if "weight" in edge_props:
                         weight = edge_props["weight"]
                         del edge_props["weight"]
                     self.add_edge(
@@ -2347,7 +2334,7 @@ class MoleculeGraph(MSONable):
                 for (u, v) in list(graph.graph.edges()):
                     edge_props = graph.graph.get_edge_data(u, v)[0]
                     weight = None
-                    if "weight" in edge_props.keys():
+                    if "weight" in edge_props:
                         weight = edge_props["weight"]
                         del edge_props["weight"]
 
@@ -2407,7 +2394,6 @@ class MoleculeGraph(MSONable):
             If None, default parameters will be used.
         :return:
         """
-
         self.set_node_attributes()
         neighbors = self.get_connected_sites(index)
 
@@ -2437,7 +2423,7 @@ class MoleculeGraph(MSONable):
                 sizes[neighbor[2]] = len(nx.descendants(disconnected, neighbor[2]))
 
             keep = max(sizes, key=lambda x: sizes[x])
-            for i in sizes.keys():
+            for i in sizes:
                 if i != keep:
                     to_remove.add(i)
 
@@ -2465,7 +2451,6 @@ class MoleculeGraph(MSONable):
             found in the Molecule. If there is no cycle including an index, the
             value will be an empty list.
         """
-
         # Copies self.graph such that all edges (u, v) matched by edges (v, u)
         undirected = self.graph.to_undirected()
         directed = undirected.to_directed()
@@ -2513,7 +2498,6 @@ class MoleculeGraph(MSONable):
         :return: list of ConnectedSite tuples,
             sorted by closest first
         """
-
         connected_sites = set()
 
         out_edges = list(self.graph.out_edges(n, data=True))
@@ -2606,7 +2590,6 @@ class MoleculeGraph(MSONable):
             or "fdp" (for more crowded graphs) usually give good outputs
         :return:
         """
-
         if not which(algo):
             raise RuntimeError("StructureGraph graph drawing requires GraphViz binaries to be in the path.")
 
@@ -2614,7 +2597,7 @@ class MoleculeGraph(MSONable):
         # graphs using matplotlib, these also work here. However,
         # a dedicated tool like GraphViz allows for much easier
         # control over graph appearance and also correctly displays
-        # mutli-graphs (matplotlib can superimpose multiple edges).
+        # multi-graphs (matplotlib can superimpose multiple edges).
 
         g = self.graph.copy()
 
@@ -2732,11 +2715,10 @@ class MoleculeGraph(MSONable):
 
     def as_dict(self):
         """
-        As in :Class: `pymatgen.core.Molecule` except
+        As in :class:`pymatgen.core.Molecule` except
         with using `to_dict_of_dicts` from NetworkX
         to store graph information.
         """
-
         d = {
             "@module": type(self).__module__,
             "@class": type(self).__name__,
@@ -2749,7 +2731,7 @@ class MoleculeGraph(MSONable):
     @classmethod
     def from_dict(cls, d):
         """
-        As in :Class: `pymatgen.core.Molecule` except
+        As in :class:`pymatgen.core.Molecule` except
         restoring graphs using `from_dict_of_dicts`
         from NetworkX to restore graph information.
         """
@@ -2791,7 +2773,7 @@ class MoleculeGraph(MSONable):
 
     def __str__(self) -> str:
         s = "Molecule Graph"
-        s += f"\nMolecule: \n{self.molecule.__str__()}"
+        s += f"\nMolecule: \n{self.molecule}"
         s += f"\nGraph: {self.name}\n"
         s += self._edges_to_string(self.graph)
         return s
@@ -2809,7 +2791,7 @@ class MoleculeGraph(MSONable):
         """
         return len(self.molecule)
 
-    def sort(self, key: Callable[[Molecule], float] = None, reverse: bool = False) -> None:
+    def sort(self, key: Callable[[Molecule], float] | None = None, reverse: bool = False) -> None:
         """Same as Molecule.sort(), also remaps nodes in graph.
 
         Args:
@@ -2844,7 +2826,7 @@ class MoleculeGraph(MSONable):
     def __copy__(self):
         return MoleculeGraph.from_dict(self.as_dict())
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """
         Two MoleculeGraphs are equal if they have equal Molecules,
         and have the same edges between Sites. Edge weights can be
@@ -2853,6 +2835,8 @@ class MoleculeGraph(MSONable):
         :param other: MoleculeGraph
         :return (bool):
         """
+        if not isinstance(other, type(self)):
+            return NotImplemented
 
         # sort for consistent node indices
         # PeriodicSite should have a proper __hash__() value,
@@ -2914,7 +2898,6 @@ class MoleculeGraph(MSONable):
             number of occurrences of bonds
         :return:
         """
-
         if self.molecule != other.molecule and strict:
             return ValueError("Meaningless to compare MoleculeGraphs if corresponding Molecules are different.")
 

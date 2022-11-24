@@ -50,7 +50,6 @@ class Cp2kOutput:
             verbose: (bool) Whether or not to parse with verbosity (will parse lots of data that may not be useful)
             auto_load (bool): Whether or not to automatically load basic info like energies and structures.
         """
-
         # IO Info
         self.filename = filename
         self.dir = os.path.dirname(filename)
@@ -362,7 +361,7 @@ class Cp2kOutput:
             while True:
                 line = f.readline()
                 if "Atom  Kind  Element       X           Y           Z          Z(eff)       Mass" in line:
-                    for i in range(self.data["num_atoms"][0][0]):
+                    for _ in range(self.data["num_atoms"][0][0]):
                         line = f.readline().split()
                         if line == []:
                             line = f.readline().split()
@@ -372,14 +371,14 @@ class Cp2kOutput:
         lattice = self.parse_cell_params()
         gs = {}
         self.data["atomic_kind_list"] = []
-        for k, v in self.data["atomic_kind_info"].items():
+        for k, v in self.data["atomic_kind_info"].items():  # noqa: B007
             if v["pseudo_potential"].upper() == "NONE":
                 gs[v["kind_number"]] = True
             else:
                 gs[v["kind_number"]] = False
 
         for c in coord_table:
-            for k, v in self.data["atomic_kind_info"].items():
+            for v in self.data["atomic_kind_info"].values():
                 if int(v["kind_number"]) == int(c[1]):
                     v["element"] = c[2]
                     break
@@ -501,7 +500,6 @@ class Cp2kOutput:
         """
         Get the forces from the output file
         """
-
         if len(self.filenames["forces"]) == 1:
             self.data["forces"] = [
                 [list(atom.coords) for atom in step]
@@ -525,7 +523,6 @@ class Cp2kOutput:
         """
         Get the stresses from the output file.
         """
-
         if len(self.filenames["stress"]) == 1:
             dat = np.genfromtxt(self.filenames["stress"][0], skip_header=1)
             dat = [dat] if len(np.shape(dat)) == 1 else dat
@@ -642,7 +639,7 @@ class Cp2kOutput:
 
         # Functional
         if self.input and self.input.check("FORCE_EVAL/DFT/XC/XC_FUNCTIONAL"):
-            xcfuncs = list(self.input["force_eval"]["dft"]["xc"]["xc_functional"].subsections.keys())
+            xcfuncs = list(self.input["force_eval"]["dft"]["xc"]["xc_functional"].subsections)
             if xcfuncs:
                 self.data["dft"]["functional"] = xcfuncs
             else:
@@ -1332,7 +1329,7 @@ class Cp2kOutput:
             terminate_on_match=terminate_on_match,
             postprocess=postprocess,
         )
-        for k in patterns.keys():
+        for k in patterns:
             self.data[k] = [i[0] for i in matches.get(k, [])]
 
     def read_table_pattern(
@@ -1380,7 +1377,7 @@ class Cp2kOutput:
 
         Returns:
             List of tables. 1) A table is a list of rows. 2) A row if either a list of
-            attribute values in case the the capturing group is defined without name in
+            attribute values in case the capturing group is defined without name in
             row_pattern, or a dict in case that named capturing groups are defined by
             row_pattern.
         """
@@ -1567,7 +1564,7 @@ def parse_dos(dos_file=None, spin_channel=None, total=False, sigma=0):
             vbmtop = i
 
         # set fermi level to be vbm plus tolerance for
-        # PMG compatability
+        # PMG compatibility
         # *not* middle of the gap, which pdos might report
         efermi = energies[vbmtop] + 1e-6
 
