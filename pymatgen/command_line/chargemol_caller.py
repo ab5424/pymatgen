@@ -1,10 +1,6 @@
-# Copyright (c) Pymatgen Development Team.
-# Distributed under the terms of the MIT License.
+"""This module implements an interface to Thomas Manz's Chargemol code
+https://sourceforge.net/projects/ddec for calculating DDEC3, DDEC6, and CM5 population analyses.
 
-"""
-This module implements an interface to Thomas Manz's
-Chargemol code (https://sourceforge.net/projects/ddec/files) for
-calculating DDEC3, DDEC6, and CM5 population analyses.
 This module depends on a compiled chargemol executable being available in the path.
 If you use this module, please cite the following based on which modules you use:
 
@@ -43,35 +39,35 @@ and Non-Periodic Materials,” J. Chem. Theory Comput. 8 (2012) 2844-2867.
 Electrostatic Potential in Periodic and Nonperiodic Materials,” J. Chem. Theory Comput. 6
 (2010) 2455-2468.
 """
-__author__ = "Martin Siron, Andrew S. Rosen"
-__version__ = "0.1"
-__maintainer__ = "Shyue Ping Ong"
-__email__ = "shyuep@gmail.com"
-__date__ = "01/18/21"
 
-import glob
+from __future__ import annotations
+
 import os
-import shutil
 import subprocess
 import warnings
+from glob import glob
 from shutil import which
 
 import numpy as np
-from monty.io import zopen
 from monty.tempfile import ScratchDir
 
 from pymatgen.core import Element
 from pymatgen.io.vasp.inputs import Potcar
 from pymatgen.io.vasp.outputs import Chgcar
 
-CHARGEMOLEXE = (
+__author__ = "Martin Siron, Andrew S. Rosen"
+__version__ = "0.1"
+__maintainer__ = "Shyue Ping Ong"
+__email__ = "shyuep@gmail.com"
+__date__ = "01/18/21"
+
+CHARGEMOL_EXE = (
     which("Chargemol_09_26_2017_linux_parallel") or which("Chargemol_09_26_2017_linux_serial") or which("chargemol")
 )
 
 
 class ChargemolAnalysis:
-    """
-    Chargemol analysis for DDEC3, DDEC6, and/or CM5 population analyses,
+    """Chargemol analysis for DDEC3, DDEC6, and/or CM5 population analyses,
     including the calculation of partial atomic charges, atomic spin moments,
     bond orders, and related properties.
     """
@@ -82,31 +78,23 @@ class ChargemolAnalysis:
         atomic_densities_path=None,
         run_chargemol=True,
     ):
-        """
-        Initializes the Chargemol Analysis.
+        """Initializes the Chargemol Analysis.
 
         Args:
             path (str): Path to the CHGCAR, POTCAR, AECCAR0, and AECCAR files.
-            Note that it doesn't matter if the files gzip'd or not.
-                Default: None (current working directory).
+                The files can be gzipped or not. Default: None (current working directory).
             atomic_densities_path (str|None): Path to the atomic densities directory
-            required by Chargemol. If None, Pymatgen assumes that this is
-            defined in a "DDEC6_ATOMIC_DENSITIES_DIR" environment variable.
-            Only used if run_chargemol is True.
-                Default: None.
+                required by Chargemol. If None, Pymatgen assumes that this is
+                defined in a "DDEC6_ATOMIC_DENSITIES_DIR" environment variable.
+                Only used if run_chargemol is True. Default: None.
             run_chargemol (bool): Whether to run the Chargemol analysis. If False,
-            the existing Chargemol output files will be read from path.
-                Default: True.
+                the existing Chargemol output files will be read from path. Default: True.
         """
         if not path:
             path = os.getcwd()
-        if run_chargemol and not (
-            which("Chargemol_09_26_2017_linux_parallel")
-            or which("Chargemol_09_26_2017_linux_serial")
-            or which("chargemol"),
-        ):
+        if run_chargemol and not CHARGEMOL_EXE:
             raise OSError(
-                "ChargemolAnalysis requires the Chargemol executable to be in the path."
+                "ChargemolAnalysis requires the Chargemol executable to be in PATH."
                 " Please download the library at https://sourceforge.net/projects/ddec/files"
                 "and follow the instructions."
             )
@@ -125,9 +113,7 @@ class ChargemolAnalysis:
             self.structure = self.chgcar.structure
             self.natoms = self.chgcar.poscar.natoms
         else:
-            self.chgcar = None
-            self.structure = None
-            self.natoms = None
+            self.chgcar = self.structure = self.natoms = None
             warnings.warn("No CHGCAR found. Some properties may be unavailable.", UserWarning)
         if self._potcarpath:
             self.potcar = Potcar.from_file(self._potcarpath)
@@ -143,8 +129,7 @@ class ChargemolAnalysis:
 
     @staticmethod
     def _get_filepath(path, filename, suffix=""):
-        """
-        Returns the full path to the filename in the path. Works even if the file has
+        """Returns the full path to the filename in the path. Works even if the file has
         a .gz extension.
 
         Args:
@@ -155,8 +140,8 @@ class ChargemolAnalysis:
         Returns:
             (str): Absolute path to the file.
         """
-        name_pattern = filename + suffix + "*" if filename != "POTCAR" else filename + "*"
-        paths = glob.glob(os.path.join(path, name_pattern))
+        name_pattern = f"{filename}{suffix}*" if filename != "POTCAR" else f"{filename}*"
+        paths = glob(os.path.join(path, name_pattern))
         fpath = None
         if len(paths) >= 1:
             # using reverse=True because, if multiple files are present,
@@ -164,57 +149,46 @@ class ChargemolAnalysis:
             # and this would give 'static' over 'relax2' over 'relax'
             # however, better to use 'suffix' kwarg to avoid this!
             paths.sort(reverse=True)
-            warning_msg = f"Multiple files detected, using {os.path.basename(paths[0])}" if len(paths) > 1 else None
-            warnings.warn(warning_msg)
+            if len(paths) > 1:
+                warnings.warn(f"Multiple files detected, using {os.path.basename(paths[0])}")
             fpath = paths[0]
         return fpath
 
-    def _execute_chargemol(self, **jobcontrol_kwargs):
-        """
-        Internal function to run Chargemol.
+    def _execute_chargemol(self, **job_control_kwargs):
+        """Internal function to run Chargemol.
 
         Args:
             atomic_densities_path (str): Path to the atomic densities directory
             required by Chargemol. If None, Pymatgen assumes that this is
             defined in a "DDEC6_ATOMIC_DENSITIES_DIR" environment variable.
                 Default: None.
-            jobcontrol_kwargs: Keyword arguments for _write_jobscript_for_chargemol.
+            job_control_kwargs: Keyword arguments for _write_jobscript_for_chargemol.
         """
         with ScratchDir("."):
-            with zopen(self._chgcarpath, "rt") as f_in:
-                with open("CHGCAR", "w") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            with zopen(self._potcarpath, "rt") as f_in:
-                with open("POTCAR", "w") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            with zopen(self._aeccar0path, "rt") as f_in:
-                with open("AECCAR0", "w") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            with zopen(self._aeccar2path, "rt") as f_in:
-                with open("AECCAR2", "w") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+            try:
+                os.symlink(self._chgcarpath, "./CHGCAR")
+                os.symlink(self._potcarpath, "./POTCAR")
+                os.symlink(self._aeccar0path, "./AECCAR0")
+                os.symlink(self._aeccar2path, "./AECCAR2")
+            except OSError as exc:
+                print(f"Error creating symbolic link: {exc}")
 
             # write job_script file:
-            self._write_jobscript_for_chargemol(**jobcontrol_kwargs)
+            self._write_jobscript_for_chargemol(**job_control_kwargs)
 
             # Run Chargemol
-            with subprocess.Popen(
-                CHARGEMOLEXE,
-                stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                close_fds=True,
-            ) as rs:
-                rs.communicate()
+            with subprocess.Popen(CHARGEMOL_EXE, stdout=subprocess.PIPE, stdin=subprocess.PIPE, close_fds=True) as rs:
+                _stdout, stderr = rs.communicate()
             if rs.returncode != 0:
                 raise RuntimeError(
-                    f"Chargemol exited with return code {rs.returncode}. Please check your Chargemol installation."
+                    f"{CHARGEMOL_EXE} exit code: {rs.returncode}, error message: {stderr!s}. "
+                    "Please check your Chargemol installation."
                 )
 
             self._from_data_dir()
 
     def _from_data_dir(self, chargemol_output_path=None):
-        """
-        Internal command to parse Chargemol files from a directory.
+        """Internal command to parse Chargemol files from a directory.
 
         Args:
             chargemol_output_path (str): Path to the folder containing the
@@ -224,51 +198,49 @@ class ChargemolAnalysis:
         if chargemol_output_path is None:
             chargemol_output_path = ""
 
-        charge_path = os.path.join(chargemol_output_path, "DDEC6_even_tempered_net_atomic_charges.xyz")
+        charge_path = f"{chargemol_output_path}/DDEC6_even_tempered_net_atomic_charges.xyz"
         self.ddec_charges = self._get_data_from_xyz(charge_path)
         self.dipoles = self._get_dipole_info(charge_path)
 
-        bond_order_path = os.path.join(chargemol_output_path, "DDEC6_even_tempered_bond_orders.xyz")
+        bond_order_path = f"{chargemol_output_path}/DDEC6_even_tempered_bond_orders.xyz"
         if os.path.exists(bond_order_path):
             self.bond_order_sums = self._get_data_from_xyz(bond_order_path)
             self.bond_order_dict = self._get_bond_order_info(bond_order_path)
         else:
-            self.bond_order_sums = None
-            self.bond_order_dict = None
+            self.bond_order_sums = self.bond_order_dict = None
 
-        spin_moment_path = os.path.join(chargemol_output_path, "DDEC6_even_tempered_atomic_spin_moments.xyz")
+        spin_moment_path = f"{chargemol_output_path}/DDEC6_even_tempered_atomic_spin_moments.xyz"
         if os.path.exists(spin_moment_path):
             self.ddec_spin_moments = self._get_data_from_xyz(spin_moment_path)
         else:
             self.ddec_spin_moments = None
 
-        rsquared_path = os.path.join(chargemol_output_path, "DDEC_atomic_Rsquared_moments.xyz")
+        rsquared_path = f"{chargemol_output_path}/DDEC_atomic_Rsquared_moments.xyz"
         if os.path.exists(rsquared_path):
             self.ddec_rsquared_moments = self._get_data_from_xyz(rsquared_path)
         else:
             self.ddec_rsquared_moments = None
 
-        rcubed_path = os.path.join(chargemol_output_path, "DDEC_atomic_Rcubed_moments.xyz")
+        rcubed_path = f"{chargemol_output_path}/DDEC_atomic_Rcubed_moments.xyz"
         if os.path.exists(rcubed_path):
             self.ddec_rcubed_moments = self._get_data_from_xyz(rcubed_path)
         else:
             self.ddec_rcubed_moments = None
 
-        rfourth_path = os.path.join(chargemol_output_path, "DDEC_atomic_Rfourth_moments.xyz")
+        rfourth_path = f"{chargemol_output_path}/DDEC_atomic_Rfourth_moments.xyz"
         if os.path.exists(rfourth_path):
             self.ddec_rfourth_moments = self._get_data_from_xyz(rfourth_path)
         else:
             self.ddec_rfourth_moments = None
 
-        ddec_analysis_path = os.path.join(chargemol_output_path, "VASP_DDEC_analysis.output")
+        ddec_analysis_path = f"{chargemol_output_path}/VASP_DDEC_analysis.output"
         if os.path.exists(ddec_analysis_path):
             self.cm5_charges = self._get_cm5_data_from_output(ddec_analysis_path)
         else:
             self.cm5_charges = None
 
     def get_charge_transfer(self, atom_index, charge_type="ddec"):
-        """
-        Returns the charge transferred for a particular atom. A positive value means
+        """Returns the charge transferred for a particular atom. A positive value means
         that the site has gained electron density (i.e. exhibits anionic character)
         whereas a negative value means the site has lost electron density (i.e. exhibits
         cationic character). This is the same thing as the negative of the partial atomic
@@ -282,7 +254,7 @@ class ChargemolAnalysis:
             float: charge transferred at atom_index
         """
         if charge_type.lower() not in ["ddec", "cm5"]:
-            raise ValueError(f"Invalid charge_type: {charge_type}")
+            raise ValueError(f"Invalid {charge_type=}")
         if charge_type.lower() == "ddec":
             charge_transfer = -self.ddec_charges[atom_index]
         elif charge_type.lower() == "cm5":
@@ -290,8 +262,7 @@ class ChargemolAnalysis:
         return charge_transfer
 
     def get_charge(self, atom_index, nelect=None, charge_type="ddec"):
-        """
-        Convenience method to get the charge on a particular atom using the same
+        """Convenience method to get the charge on a particular atom using the same
         sign convention as the BaderAnalysis. Note that this is *not* the partial
         atomic charge. This value is nelect (e.g. ZVAL from the POTCAR) + the
         charge transferred. If you want the partial atomic charge, use
@@ -323,8 +294,7 @@ class ChargemolAnalysis:
         return charge
 
     def get_partial_charge(self, atom_index, charge_type="ddec"):
-        """
-        Convenience method to get the partial atomic charge on a particular atom.
+        """Convenience method to get the partial atomic charge on a particular atom.
         This is the value printed in the Chargemol analysis.
 
         Args:
@@ -340,8 +310,7 @@ class ChargemolAnalysis:
         return partial_charge
 
     def get_bond_order(self, index_from, index_to):
-        """
-        Convenience method to get the bond order between two atoms.
+        """Convenience method to get the bond order between two atoms.
 
         Args:
             index_from (int): Index of atom to get bond order from.
@@ -352,11 +321,7 @@ class ChargemolAnalysis:
         """
         bonded_set = self.bond_order_dict[index_from]["bonded_to"]
         bond_orders = [v["bond_order"] for v in bonded_set if v["index"] == index_to]
-        if bond_orders == []:
-            sum_bo = 0.0
-        else:
-            sum_bo = np.sum(bond_orders)
-        return sum_bo
+        return 0.0 if bond_orders == [] else np.sum(bond_orders)
 
     def _write_jobscript_for_chargemol(
         self,
@@ -365,8 +330,7 @@ class ChargemolAnalysis:
         method="ddec6",
         compute_bond_orders=True,
     ):
-        """
-        Writes job_script.txt for Chargemol execution
+        """Writes job_script.txt for Chargemol execution.
 
         Args:
             net_charge (float): Net charge of the system.
@@ -374,8 +338,8 @@ class ChargemolAnalysis:
             periodicity (tuple[bool]): Periodicity of the system.
                 Default: (True, True, True).
             method (str): Method to use for the analysis. Options include "ddec6"
-            and "ddec3".
-                Default: "ddec6"
+                and "ddec3". Default: "ddec6"
+            compute_bond_orders (bool): Whether to compute bond orders. Default: True.
         """
         self.net_charge = net_charge
         self.periodicity = periodicity
@@ -398,7 +362,7 @@ class ChargemolAnalysis:
             )
 
         # atomic_densities dir
-        atomic_densities_path = self._atomic_densities_path or os.environ.get("DDEC6_ATOMIC_DENSITIES_DIR", None)
+        atomic_densities_path = self._atomic_densities_path or os.getenv("DDEC6_ATOMIC_DENSITIES_DIR", None)
         if atomic_densities_path is None:
             raise OSError(
                 "The DDEC6_ATOMIC_DENSITIES_DIR environment variable must be set or the atomic_densities_path must"
@@ -411,9 +375,8 @@ class ChargemolAnalysis:
         if os.name == "nt":
             if atomic_densities_path[-1] != "\\":
                 atomic_densities_path += "\\"
-        else:
-            if atomic_densities_path[-1] != "/":
-                atomic_densities_path += "/"
+        elif atomic_densities_path[-1] != "/":
+            atomic_densities_path += "/"
 
         lines += (
             f"\n<atomic densities directory complete path>\n{atomic_densities_path}\n</atomic densities directory "
@@ -432,8 +395,7 @@ class ChargemolAnalysis:
 
     @staticmethod
     def _get_dipole_info(filepath):
-        """
-        Internal command to process dipoles
+        """Internal command to process dipoles.
 
         Args:
             filepath (str): The path to the DDEC6_even_tempered_net_atomic_charges.xyz file
@@ -458,8 +420,7 @@ class ChargemolAnalysis:
 
     @staticmethod
     def _get_bond_order_info(filename):
-        """
-        Internal command to process pairwise bond order information
+        """Internal command to process pairwise bond order information.
 
         Args:
             filename (str): The path to the DDEC6_even_tempered_bond_orders.xyz file
@@ -469,17 +430,17 @@ class ChargemolAnalysis:
 
         with open(filename) as r:
             for line in r:
-                l = line.strip().split()
+                split = line.strip().split()
                 if "Printing BOs" in line:
-                    start_idx = int(l[5]) - 1
-                    start_el = Element(l[7])
+                    start_idx = int(split[5]) - 1
+                    start_el = Element(split[7])
                     bond_order_info[start_idx] = {"element": start_el, "bonded_to": []}
                 elif "Bonded to the" in line:
-                    direction = tuple(int(i.split(")")[0].split(",")[0]) for i in l[4:7])
-                    end_idx = int(l[12]) - 1
-                    end_el = Element(l[14])
-                    bo = float(l[20])
-                    spin_bo = float(l[-1])
+                    direction = tuple(int(i.split(")")[0].split(",")[0]) for i in split[4:7])
+                    end_idx = int(split[12]) - 1
+                    end_el = Element(split[14])
+                    bo = float(split[20])
+                    spin_bo = float(split[-1])
                     bond_order_info[start_idx]["bonded_to"].append(
                         {
                             "index": end_idx,
@@ -490,16 +451,15 @@ class ChargemolAnalysis:
                         }
                     )
                 elif "The sum of bond orders for this atom" in line:
-                    bond_order_info[start_idx]["bond_order_sum"] = float(l[-1])
+                    bond_order_info[start_idx]["bond_order_sum"] = float(split[-1])
 
         return bond_order_info
 
     def get_property_decorated_structure(self):
-        """
-        Takes CHGCAR's structure object and updates it with properties
+        """Takes CHGCAR's structure object and updates it with properties
         from the Chargemol analysis.
 
-        Returns
+        Returns:
             Pymatgen structure with site properties added
         """
         struct = self.structure.copy()
@@ -516,22 +476,21 @@ class ChargemolAnalysis:
 
     @property
     def summary(self):
-        """
-        Returns a dictionary summary of the Chargemol analysis
-            {
-                "ddec": {
-                            "partial_charges": List[float],
-                            "spin_moments": List[float],
-                            "dipoles": List[float],
-                            "rsquared_moments": List[float],
-                            "rcubed_moments": List[float],
-                            "rfourth_moments": List[float],
-                            "bond_order_dict": Dict
-                        },
-                "cm5": {
-                            "partial_charges": List[float],
-                        }
-            }
+        """Returns a dictionary summary of the Chargemol analysis
+        {
+        "ddec": {
+        "partial_charges": List[float],
+        "spin_moments": List[float],
+        "dipoles": List[float],
+        "rsquared_moments": List[float],
+        "rcubed_moments": List[float],
+        "rfourth_moments": List[float],
+        "bond_order_dict": Dict
+        },
+        "cm5": {
+        "partial_charges": List[float],
+        }
+        }.
         """
         summary = {}
         ddec_summary = {
@@ -552,10 +511,7 @@ class ChargemolAnalysis:
         if self.bond_order_dict:
             ddec_summary["bond_order_dict"] = self.bond_order_dict
 
-        if self.cm5_charges:
-            cm5_summary = {"partial_charges": self.cm5_charges}
-        else:
-            cm5_summary = None
+        cm5_summary = {"partial_charges": self.cm5_charges} if self.cm5_charges else None
 
         summary["ddec"] = ddec_summary
         summary["cm5"] = cm5_summary
@@ -564,8 +520,7 @@ class ChargemolAnalysis:
 
     @staticmethod
     def _get_data_from_xyz(xyz_path):
-        """
-        Internal command to process Chargemol XYZ files
+        """Internal command to process Chargemol XYZ files.
 
         Args:
             xyz_path (str): Path to XYZ file
@@ -589,8 +544,7 @@ class ChargemolAnalysis:
 
     @staticmethod
     def _get_cm5_data_from_output(ddec_analysis_path):
-        """
-        Internal command to process Chargemol CM5 data
+        """Internal command to process Chargemol CM5 data.
 
         Args:
             ddec_analysis_path (str): Path VASP_DDEC_analysis.output file

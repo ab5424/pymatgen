@@ -1,10 +1,7 @@
-# Copyright (c) Pymatgen Development Team.
-# Distributed under the terms of the MIT License.
+"""Determine functional groups present in a Molecule."""
 
-"""
-Determine functional groups present in a Molecule.
-"""
 
+from __future__ import annotations
 
 import copy
 
@@ -50,13 +47,13 @@ class FunctionalGroupExtractor:
         if isinstance(molecule, str):
             try:
                 if optimize:
-                    obmol = BabelMolAdaptor.from_file(molecule, file_format="mol")
+                    ob_mol = BabelMolAdaptor.from_file(molecule, file_format="mol")
                     # OBMolecule does not contain pymatgen Molecule information
-                    # So, we need to wrap the obmol in a BabelMolAdapter
-                    obmol.add_hydrogen()
-                    obmol.make3d()
-                    obmol.localopt()
-                    self.molecule = obmol.pymatgen_mol
+                    # So, we need to wrap the ob_mol in a BabelMolAdapter
+                    ob_mol.add_hydrogen()
+                    ob_mol.make3d()
+                    ob_mol.localopt()
+                    self.molecule = ob_mol.pymatgen_mol
                 else:
                     self.molecule = Molecule.from_file(molecule)
             except OSError:
@@ -64,23 +61,23 @@ class FunctionalGroupExtractor:
 
         elif isinstance(molecule, Molecule):
             if optimize:
-                obmol = BabelMolAdaptor(molecule)
-                obmol.add_hydrogen()
-                obmol.make3d()
-                obmol.localopt()
+                ob_mol = BabelMolAdaptor(molecule)
+                ob_mol.add_hydrogen()
+                ob_mol.make3d()
+                ob_mol.localopt()
 
-                self.molecule = obmol.pymatgen_mol
+                self.molecule = ob_mol.pymatgen_mol
             else:
                 self.molecule = molecule
 
         elif isinstance(molecule, MoleculeGraph):
             if optimize:
-                obmol = BabelMolAdaptor(molecule.molecule)
-                obmol.add_hydrogen()
-                obmol.make3d()
-                obmol.localopt()
+                ob_mol = BabelMolAdaptor(molecule.molecule)
+                ob_mol.add_hydrogen()
+                ob_mol.make3d()
+                ob_mol.localopt()
 
-                self.molecule = obmol.pymatgen_mol
+                self.molecule = ob_mol.pymatgen_mol
 
             else:
                 self.molecule = molecule.molecule
@@ -105,7 +102,9 @@ class FunctionalGroupExtractor:
 
         :param elements: List of elements to identify (if only certain
             functional groups are of interest).
-        :return: set of ints representing node indices
+
+        Returns:
+            set of ints representing node indices
         """
         heteroatoms = set()
 
@@ -113,9 +112,8 @@ class FunctionalGroupExtractor:
             if elements is not None:
                 if str(self.species[node]) in elements:
                     heteroatoms.add(node)
-            else:
-                if str(self.species[node]) not in ["C", "H"]:
-                    heteroatoms.add(node)
+            elif str(self.species[node]) not in ["C", "H"]:
+                heteroatoms.add(node)
 
         return heteroatoms
 
@@ -135,7 +133,9 @@ class FunctionalGroupExtractor:
         :param elements: List of elements that will qualify a carbon as special
             (if only certain functional groups are of interest).
             Default None.
-        :return: set of ints representing node indices
+
+        Returns:
+            set of ints representing node indices
         """
         specials = set()
 
@@ -150,9 +150,8 @@ class FunctionalGroupExtractor:
                 if elements is not None:
                     if str(self.species[neighbor]) in elements and int(attributes[0]["weight"]) in [2, 3]:
                         specials.add(node)
-                else:
-                    if str(self.species[neighbor]) not in ["C", "H"] and int(attributes[0]["weight"]) in [2, 3]:
-                        specials.add(node)
+                elif str(self.species[neighbor]) not in ["C", "H"] and int(attributes[0]["weight"]) in [2, 3]:
+                    specials.add(node)
 
         # Condition two: carbon-carbon double & triple bonds
         for node in carbons:
@@ -200,7 +199,9 @@ class FunctionalGroupExtractor:
 
         :param atoms: set of marked "interesting" atoms, presumably identified
             using other functions in this class.
-        :return: list of sets of ints, representing groups of connected atoms
+
+        Returns:
+            list of sets of ints, representing groups of connected atoms
         """
         # We will add hydrogens to functional groups
         hydrogens = {n for n in self.molgraph.graph.nodes if str(self.species[n]) == "H"}
@@ -208,7 +209,7 @@ class FunctionalGroupExtractor:
         # Graph representation of only marked atoms
         subgraph = self.molgraph.graph.subgraph(list(atoms)).to_undirected()
 
-        func_grps = []
+        func_groups = []
         for func_grp in nx.connected_components(subgraph):
             grp_hs = set()
             for node in func_grp:
@@ -217,11 +218,11 @@ class FunctionalGroupExtractor:
                     # Add all associated hydrogens into the functional group
                     if neighbor in hydrogens:
                         grp_hs.add(neighbor)
-            func_grp = func_grp.union(grp_hs)
+            func_grp = func_grp | grp_hs
 
-            func_grps.append(func_grp)
+            func_groups.append(func_grp)
 
-        return func_grps
+        return func_groups
 
     def get_basic_functional_groups(self, func_groups=None):
         """
@@ -235,7 +236,9 @@ class FunctionalGroupExtractor:
         :param func_groups: List of strs representing the functional groups of
             interest. Default to None, meaning that all of the functional groups
             defined in this function will be sought.
-        :return: list of sets of ints, representing groups of connected atoms
+
+        Returns:
+            list of sets of ints, representing groups of connected atoms
         """
         strat = OpenBabelNN()
 
@@ -299,11 +302,13 @@ class FunctionalGroupExtractor:
             defined in this function will be sought.
         :param catch_basic: bool. If True, use get_basic_functional_groups and
             other methods
-        :return: list of sets of ints, representing groups of connected atoms
+
+        Returns:
+            list of sets of ints, representing groups of connected atoms
         """
         heteroatoms = self.get_heteroatoms(elements=elements)
         special_cs = self.get_special_carbon(elements=elements)
-        groups = self.link_marked_atoms(heteroatoms.union(special_cs))
+        groups = self.link_marked_atoms(heteroatoms | special_cs)
 
         if catch_basic:
             groups += self.get_basic_functional_groups(func_groups=func_groups)
@@ -315,7 +320,9 @@ class FunctionalGroupExtractor:
         Determine classes of functional groups present in a set.
 
         :param groups: Set of functional groups.
-        :return: dict containing representations of the groups, the indices of
+
+        Returns:
+            dict containing representations of the groups, the indices of
             where the group occurs in the MoleculeGraph, and how many of each
             type of group there is.
         """
