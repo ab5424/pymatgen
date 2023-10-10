@@ -86,13 +86,7 @@ class TestMPResterOld(PymatgenTest):
         expected_vals = vals.json()
 
         for prop in props:
-            if prop not in [
-                "hubbards",
-                "unit_cell_formula",
-                "elements",
-                "icsd_ids",
-                "task_ids",
-            ]:
+            if prop not in ["hubbards", "unit_cell_formula", "elements", "icsd_ids", "task_ids"]:
                 val = self.rester.get_data(mp_id, prop=prop)[0][prop]
                 if prop in ["energy", "energy_per_atom"]:
                     prop = "final_" + prop
@@ -377,8 +371,8 @@ class TestMPResterOld(PymatgenTest):
         assert isinstance(ws, WulffShape)
 
     def test_get_cohesive_energy(self):
-        ecoh = self.rester.get_cohesive_energy("mp-13")
-        assert ecoh, 5.04543279
+        e_coh = self.rester.get_cohesive_energy("mp-13")
+        assert e_coh, 5.04543279
 
     def test_get_gb_data(self):
         mo_gbs = self.rester.get_gb_data(chemsys="Mo")
@@ -530,10 +524,6 @@ class TestMPResterNewBasic:
     def setup(self):
         self.rester = _MPResterBasic()
 
-    def test_attr_error(self):
-        with pytest.raises(AttributeError, match="summary is not an attribute"):
-            _ = self.rester.summary
-
     def test_get_summary(self):
         docs = self.rester.get_summary({"formula": "Fe2O3"})
         assert len(docs) > 3
@@ -544,6 +534,7 @@ class TestMPResterNewBasic:
 
         doc = self.rester.summary.search(material_ids="mp-19770,mp-19017", _fields="formula_pretty,energy_above_hull")
         assert len(doc) == 2
+        assert len(doc[0]) == 2
         assert doc[0]["energy_above_hull"] >= 0
         assert doc[1]["energy_above_hull"] >= 0
 
@@ -896,8 +887,8 @@ class TestMPResterNewBasic:
     def test_parity_with_mp_api(self):
         try:
             from mp_api.client import MPRester as MPResterMPAPI
-        except ImportError:
-            pytest.importorskip("mp_api.client.MPRester")
+        except Exception:
+            pytest.skip("mp_api.client.MPRester cannot be imported for this test.")
         mpr_mpapi = MPResterMPAPI(PMG_MAPI_KEY)
         # Test summary
         mp_data = mpr_mpapi.summary.search(formula="Al2O3")
