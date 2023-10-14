@@ -336,7 +336,7 @@ class PackmolRunner:
         name = name or f"ml{num}"
 
         # bma = BabelMolAdaptor(mol)
-        pbm = pybel.Molecule(bma._obmol)
+        pbm = pybel.Molecule(bma._ob_mol)
         for x in pbm.residues:
             x.OBResidue.SetName(name)
             x.OBResidue.SetNum(num)
@@ -414,7 +414,7 @@ class PackmolRunner:
 
         filename = filename or self.control_params["output"]
         bma = BabelMolAdaptor.from_file(filename, "pdb")
-        pbm = pybel.Molecule(bma._obmol)
+        pbm = pybel.Molecule(bma._ob_mol)
 
         assert len(pbm.residues) == sum(x["number"] for x in self.param_list)
 
@@ -456,7 +456,7 @@ class LammpsRunner:
         lammps_cmd = [*self.lammps_bin, "-in", self.input_filename]
         print(f"Running: {' '.join(lammps_cmd)}")
         with Popen(lammps_cmd, stdout=PIPE, stderr=PIPE) as p:
-            (stdout, stderr) = p.communicate()
+            stdout, stderr = p.communicate()
         return stdout, stderr
 
 
