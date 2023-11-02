@@ -1,9 +1,7 @@
-# Copyright (c) Pymatgen Development Team.
-# Distributed under the terms of the MIT License.
+"""This module provides classes for the Piezoelectric tensor."""
 
-"""
-This module provides classes for the Piezoelectric tensor
-"""
+from __future__ import annotations
+
 import warnings
 
 import numpy as np
@@ -20,9 +18,7 @@ __date__ = "Feb, 2016"
 
 
 class PiezoTensor(Tensor):
-    """
-    This class describes the 3x6 piezo tensor in Voigt-notation
-    """
+    """This class describes the 3x6 piezo tensor in Voigt-notation."""
 
     def __new__(cls, input_array, tol: float = 1e-3):
         """
