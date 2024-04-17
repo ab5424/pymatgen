@@ -140,12 +140,12 @@ def charge_string(charge, brackets=True, explicit_one=True):
         chg_str = chg_str.replace("1", "")
 
     if chg_str != "(aq)" and brackets:
-        chg_str = "[" + chg_str + "]"
+        chg_str = f"[{chg_str}]"
 
     return chg_str
 
 
-def latexify(formula):
+def latexify(formula: str, bold: bool = False):
     """Generates a LaTeX formatted formula. E.g., Fe2O3 is transformed to
     Fe$_{2}$O$_{3}$.
 
@@ -154,33 +154,36 @@ def latexify(formula):
 
     Args:
         formula (str): Input formula.
+        bold (bool): Whether to make the subscripts bold. Defaults to False.
 
     Returns:
         Formula suitable for display as in LaTeX with proper subscripts.
     """
-    return re.sub(r"([A-Za-z\(\)])([\d\.]+)", r"\1$_{\2}$", formula)
+    return re.sub(r"([A-Za-z\(\)])([\d\.]+)", r"\1$_{\\mathbf{\2}}$" if bold else r"\1$_{\2}$", formula)
 
 
-def htmlify(formula):
+def htmlify(formula: str) -> str:
     """Generates a HTML formatted formula, e.g. Fe2O3 is transformed to
     Fe<sub>2</sub>O</sub>3</sub>.
 
     Note that Composition now has a to_html_string() method that may
     be used instead.
 
-    :param formula:
+    Args:
+        formula: The string to format.
     """
     return re.sub(r"([A-Za-z\(\)])([\d\.]+)", r"\1<sub>\2</sub>", formula)
 
 
-def unicodeify(formula):
+def unicodeify(formula: str) -> str:
     """Generates a formula with unicode subscripts, e.g. Fe2O3 is transformed
     to Fe₂O₃. Does not support formulae with decimal points.
 
     Note that Composition now has a to_unicode_string() method that may
     be used instead.
 
-    :param formula:
+    Args:
+        formula: The string to format.
     """
     if "." in formula:
         raise ValueError("No unicode character exists for subscript period.")
@@ -255,8 +258,8 @@ def unicodeify_species(specie_string):
     if not specie_string:
         return ""
 
-    for character, unicode_character in SUPERSCRIPT_UNICODE.items():
-        specie_string = specie_string.replace(character, unicode_character)
+    for char, unicode_char in SUPERSCRIPT_UNICODE.items():
+        specie_string = specie_string.replace(char, unicode_char)
 
     return specie_string
 
@@ -295,11 +298,11 @@ def transformation_to_string(matrix, translation_vec=(0, 0, 0), components=("x",
     parts = []
     for idx in range(3):
         string = ""
-        m = matrix[idx]
+        mat = matrix[idx]
         offset = translation_vec[idx]
         for j, dim in enumerate(components):
-            if m[j] != 0:
-                f = Fraction(m[j]).limit_denominator()
+            if mat[j] != 0:
+                f = Fraction(mat[j]).limit_denominator()
                 if string != "" and f >= 0:
                     string += "+"
                 if abs(f.numerator) != 1:
@@ -331,16 +334,13 @@ def disordered_formula(disordered_struct, symbols=("x", "y", "z"), fmt="plain"):
         species more symbols will need to be added
         fmt (str): 'plain', 'HTML' or 'LaTeX'
 
-    Returns (str): a disordered formula string
+    Returns:
+        str: a disordered formula string
     """
-    # this is in string utils and not in
-    # Composition because we need to have access
-    # to site occupancies to calculate this, so
-    # have to pass the full structure as an argument
-    # (alternatively this could be made a method on
-    # Structure)
-    from pymatgen.core.composition import Composition
-    from pymatgen.core.periodic_table import get_el_sp
+    # this is in string utils and not in Composition because we need to have access to
+    # site occupancies to calculate this, so have to pass the full structure as an
+    # argument (alternatively this could be made a method on Structure)
+    from pymatgen.core import Composition, get_el_sp
 
     if disordered_struct.is_ordered:
         raise ValueError("Structure is not disordered, so disordered formula not defined.")
@@ -398,7 +398,10 @@ def disordered_formula(disordered_struct, symbols=("x", "y", "z"), fmt="plain"):
     elif fmt == "HTML":
         sub_start = "<sub>"
         sub_end = "</sub>"
-    elif fmt != "plain":
+    elif fmt == "plain":
+        sub_start = ""
+        sub_end = ""
+    else:
         raise ValueError("Unsupported output format, choose from: LaTeX, HTML, plain")
 
     disordered_formula = []

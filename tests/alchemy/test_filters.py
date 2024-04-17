@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import unittest
+from unittest import TestCase
 
 from monty.json import MontyDecoder
 
@@ -13,9 +13,7 @@ from pymatgen.alchemy.filters import (
 )
 from pymatgen.alchemy.transmuters import StandardTransmuter
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from pymatgen.core.lattice import Lattice
-from pymatgen.core.periodic_table import Species
-from pymatgen.core.structure import Structure
+from pymatgen.core import Lattice, Species, Structure
 from pymatgen.util.testing import TEST_FILES_DIR, PymatgenTest
 
 
@@ -72,11 +70,11 @@ class TestSpecieProximityFilter(PymatgenTest):
         assert isinstance(SpecieProximityFilter.from_dict(dct), SpecieProximityFilter)
 
 
-class TestRemoveDuplicatesFilter(unittest.TestCase):
+class TestRemoveDuplicatesFilter(TestCase):
     def setUp(self):
         with open(f"{TEST_FILES_DIR}/TiO2_entries.json") as file:
             entries = json.load(file, cls=MontyDecoder)
-        self._struct_list = [e.structure for e in entries]
+        self._struct_list = [entry.structure for entry in entries]
         self._sm = StructureMatcher()
 
     def test_filter(self):
@@ -91,11 +89,11 @@ class TestRemoveDuplicatesFilter(unittest.TestCase):
         assert isinstance(RemoveDuplicatesFilter().from_dict(dct), RemoveDuplicatesFilter)
 
 
-class TestRemoveExistingFilter(unittest.TestCase):
+class TestRemoveExistingFilter(TestCase):
     def setUp(self):
-        with open(f"{TEST_FILES_DIR}/TiO2_entries.json") as fp:
-            entries = json.load(fp, cls=MontyDecoder)
-        self._struct_list = [e.structure for e in entries]
+        with open(f"{TEST_FILES_DIR}/TiO2_entries.json") as file:
+            entries = json.load(file, cls=MontyDecoder)
+        self._struct_list = [entry.structure for entry in entries]
         self._sm = StructureMatcher()
         self._existing_structures = self._struct_list[:-1]
 

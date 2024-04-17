@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from numpy.typing import ArrayLike, NDArray
+    from typing_extensions import Self
 
 __author__ = "Jimmy-Xuan Shen"
 __copyright__ = "Copyright 2022, The Materials Project"
@@ -70,7 +71,7 @@ class DielectricFunctionCalculator(MSONable):
     volume: float
 
     @classmethod
-    def from_vasp_objects(cls, vrun: Vasprun, waveder: Waveder):
+    def from_vasp_objects(cls, vrun: Vasprun, waveder: Waveder) -> Self:
         """Construct a DielectricFunction from Vasprun, Kpoint, and Waveder objects.
 
         Args:
@@ -94,7 +95,7 @@ class DielectricFunctionCalculator(MSONable):
         if vrun.parameters["ISYM"] != 0:
             raise NotImplementedError("ISYM != 0 is not implemented yet")
 
-        return DielectricFunctionCalculator(
+        return cls(
             cder_real=waveder.cder_real,
             cder_imag=waveder.cder_imag,
             eigs=eigs,
@@ -110,7 +111,7 @@ class DielectricFunctionCalculator(MSONable):
         )
 
     @classmethod
-    def from_directory(cls, directory: Path | str):
+    def from_directory(cls, directory: Path | str) -> Self:
         """Construct a DielectricFunction from a directory containing vasprun.xml and WAVEDER files."""
 
         def _try_reading(dtypes):
@@ -118,10 +119,10 @@ class DielectricFunctionCalculator(MSONable):
             for dtype in dtypes:
                 try:
                     return Waveder.from_binary(f"{directory}/WAVEDER", data_type=dtype)
-                except ValueError as e:
-                    if "reshape" in str(e):
+                except ValueError as exc:
+                    if "reshape" in str(exc):
                         continue
-                    raise e
+                    raise exc
             return None
 
         vrun = Vasprun(f"{directory}/vasprun.xml")
@@ -306,9 +307,8 @@ def get_delta(x0: float, sigma: float, nx: int, dx: float, ismear: int = 3):
         dx: The gridspacing of the output grid.
         ismear: The smearing parameter used by the ``step_func``.
 
-    Return:
+    Returns:
         np.array: Array of size `nx` with delta function on the desired outputgrid.
-
     """
     xgrid = np.linspace(0, nx * dx, nx, endpoint=False)
     xgrid -= x0
@@ -331,7 +331,7 @@ def get_step(x0, sigma, nx, dx, ismear):
         dx: The gridspacing of the output grid.
         ismear: The smearing parameter used by the ``step_func``.
 
-    Return:
+    Returns:
         np.array: Array of size `nx` with step function on the desired outputgrid.
     """
     xgrid = np.linspace(0, nx * dx, nx, endpoint=False)
@@ -368,9 +368,8 @@ def epsilon_imag(
         jdir: The second direction of the dielectric tensor
         mask: Mask for the bands/kpoint/spin index to include in the calculation
 
-    Return:
+    Returns:
         np.array: Array of size `nedos` with the imaginary part of the dielectric function.
-
     """
     norm_kweights = np.array(kweights) / np.sum(kweights)
     egrid = np.linspace(0, nedos * deltae, nedos, endpoint=False)
@@ -388,10 +387,10 @@ def epsilon_imag(
     try:
         min_band0, max_band0 = np.min(np.where(cderm)[0]), np.max(np.where(cderm)[0])
         min_band1, max_band1 = np.min(np.where(cderm)[1]), np.max(np.where(cderm)[1])
-    except ValueError as e:
-        if "zero-size array" in str(e):
-            return egrid, np.zeros_like(egrid, dtype=np.complex_)
-        raise e
+    except ValueError as exc:
+        if "zero-size array" in str(exc):
+            return egrid, np.zeros_like(egrid, dtype=np.complex128)
+        raise exc
     _, _, nk, nspin = cderm.shape[:4]
     iter_idx = [
         range(min_band0, max_band0 + 1),
@@ -435,7 +434,7 @@ def kramers_kronig(
         deltae: The energy grid spacing
         cshift: The shift of the imaginary part of the dielectric function.
 
-    Return:
+    Returns:
         np.array: Array of size `nedos` with the complex dielectric function.
     """
     egrid = np.linspace(0, deltae * nedos, nedos)

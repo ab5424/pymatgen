@@ -52,20 +52,35 @@ class TestAirssProvider:
         date, path = rs_info
         assert path == "/path/to/airss/run"
         assert date.day == 16
+        assert date.month == 7
+        assert date.year == 2021
 
         castep_v = provider.get_castep_version()
-        assert castep_v is not None
         assert castep_v == "19.11"
 
         frd = provider.get_func_rel_disp()
         assert frd is not None
-        f, r, d = frd
-        assert f == "Perdew Burke Ernzerhof"
+        functional, rel, disp = frd
+        assert functional == "Perdew Burke Ernzerhof"
+        assert rel == "Koelling-Harmon"
+        assert disp == "off"
 
         airss_v = provider.get_airss_version()
         assert airss_v is not None
         assert airss_v[0] == "0.9.1"
         assert airss_v[1].year == 2018
+
+    def test_end_of_file_newline(self, provider: AirssProvider):
+        """https://github.com/materialsproject/pymatgen/issues/3636"""
+        string = ResWriter(provider.entry).string
+        assert string.endswith("\n")
+
+    def test_empty_rems_no_blank_line(self, provider: AirssProvider):
+        """https://github.com/materialsproject/pymatgen/issues/3636"""
+        entry = provider.entry
+        del entry.data["rems"]
+        string = ResWriter(entry).string
+        assert all(string.splitlines())
 
     def test_entry(self, provider: AirssProvider):
         entry1 = provider.entry
@@ -117,10 +132,10 @@ class TestAirssProvider:
 
 class TestSpin:
     def test_read_spin(self):
-        with open(res_coc) as f:
-            lines = f.readlines()
+        with open(res_coc) as file:
+            lines = file.readlines()
         # add spin to a line
-        lines[25] = lines[25][:-1] + " -1.4\n"
+        lines[25] = f"{lines[25][:-1]} -1.4\n"
         contents = "".join(lines)
         provider = AirssProvider.from_str(contents)
 

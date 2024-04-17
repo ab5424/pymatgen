@@ -279,7 +279,7 @@ if __name__ == "__main__":
                 f"Get the explicit optimized permutations for geometry {cg.name!r} (symbol : "
                 f'{cg_symbol!r}) ? ("y" to confirm, "q" to quit)\n'
             )
-            if test not in ["y", "q"]:
+            if test not in ("y", "q"):
                 print("Wrong key, try again")
                 continue
             if test == "y":
@@ -431,7 +431,6 @@ if __name__ == "__main__":
         )
         if test == "y":
             new_geom_dir = "new_geometry_files"
-            if not os.path.exists(new_geom_dir):
-                os.makedirs(new_geom_dir)
-            with open(f"{new_geom_dir}/{cg_symbol}.json", "w") as file:
+            os.makedirs(new_geom_dir, exist_ok=True)
+            with open(f"{new_geom_dir}/{cg_symbol}.json", mode="w") as file:
                 json.dump(cg.as_dict(), file)

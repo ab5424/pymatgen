@@ -6,6 +6,7 @@ where it was originally done by Guido Petretto and Matteo Giantomassi.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 
     from matplotlib.axes import Axes
     from numpy.typing import ArrayLike
+    from typing_extensions import Self
 
 __author__ = "Henrique Miranda, Guido Petretto, Matteo Giantomassi"
 __copyright__ = "Copyright 2018, The Materials Project"
@@ -58,7 +60,7 @@ class IRDielectricTensor(MSONable):
         self.epsilon_infinity = np.array(epsilon_infinity)
 
     @classmethod
-    def from_dict(cls, dct: dict) -> IRDielectricTensor:
+    def from_dict(cls, dct: dict) -> Self:
         """Returns IRDielectricTensor from dict representation."""
         structure = Structure.from_dict(dct["structure"])
         oscillator_strength = dct["oscillator_strength"]
@@ -89,10 +91,8 @@ class IRDielectricTensor(MSONable):
 
     def write_json(self, filename: str | PathLike) -> None:
         """Save a json file with this data."""
-        import json
-
-        with open(filename, "w") as f:
-            json.dump(self.as_dict(), f)
+        with open(filename, mode="w") as file:
+            json.dump(self.as_dict(), file)
 
     def get_ir_spectra(
         self, broad: list | float = 0.00005, emin: float = 0, emax: float | None = None, divs: int = 500

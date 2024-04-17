@@ -9,16 +9,17 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 from monty.json import MSONable
 
-from pymatgen.core.composition import Composition, SpeciesLike
-from pymatgen.core.lattice import Lattice
-from pymatgen.core.periodic_table import get_el_sp
-from pymatgen.core.structure import Structure
+from pymatgen.core import Composition, Lattice, Structure, get_el_sp
 from pymatgen.optimization.linear_assignment import LinearAssignment
 from pymatgen.util.coord import lattice_points_in_supercell
 from pymatgen.util.coord_cython import is_coord_subset_pbc, pbc_shortest_vectors
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from typing_extensions import Self
+
+    from pymatgen.util.typing import SpeciesLike
 
 __author__ = "William Davidson Richards, Stephen Dacek, Shyue Ping Ong"
 __copyright__ = "Copyright 2011, The Materials Project"
@@ -29,7 +30,7 @@ __status__ = "Production"
 __date__ = "Dec 3, 2012"
 
 
-class AbstractComparator(MSONable, metaclass=abc.ABCMeta):
+class AbstractComparator(MSONable, abc.ABC):
     """
     Abstract Comparator class. A Comparator defines how sites are compared in
     a structure.
@@ -76,9 +77,10 @@ class AbstractComparator(MSONable, metaclass=abc.ABCMeta):
         """
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, dct: dict) -> Self:
         """
-        :param d: Dict representation
+        Args:
+            dct (dict): Dict representation
 
         Returns:
             Comparator.
@@ -88,11 +90,11 @@ class AbstractComparator(MSONable, metaclass=abc.ABCMeta):
                 f"pymatgen.analysis.{trans_modules}",
                 globals(),
                 locals(),
-                [d["@class"]],
+                [dct["@class"]],
                 0,
             )
-            if hasattr(mod, d["@class"]):
-                trans = getattr(mod, d["@class"])
+            if hasattr(mod, dct["@class"]):
+                trans = getattr(mod, dct["@class"])
                 return trans()
         raise ValueError("Invalid Comparator dict")
 
@@ -268,7 +270,10 @@ class OccupancyComparator(AbstractComparator):
 
     def get_hash(self, composition):
         """
-        :param composition: Composition.
+        Args:
+            composition: Composition.
+
+        TODO: might need a proper hash method
 
         Returns:
             1. Difficult to define sensible hash
@@ -855,24 +860,25 @@ class StructureMatcher(MSONable):
         }
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, dct: dict) -> Self:
         """
-        :param d: Dict representation
+        Args:
+            dct (dict): Dict representation
 
         Returns:
             StructureMatcher
         """
         return cls(
-            ltol=d["ltol"],
-            stol=d["stol"],
-            angle_tol=d["angle_tol"],
-            primitive_cell=d["primitive_cell"],
-            scale=d["scale"],
-            attempt_supercell=d["attempt_supercell"],
-            allow_subset=d["allow_subset"],
-            comparator=AbstractComparator.from_dict(d["comparator"]),
-            supercell_size=d["supercell_size"],
-            ignored_species=d["ignored_species"],
+            ltol=dct["ltol"],
+            stol=dct["stol"],
+            angle_tol=dct["angle_tol"],
+            primitive_cell=dct["primitive_cell"],
+            scale=dct["scale"],
+            attempt_supercell=dct["attempt_supercell"],
+            allow_subset=dct["allow_subset"],
+            comparator=AbstractComparator.from_dict(dct["comparator"]),
+            supercell_size=dct["supercell_size"],
+            ignored_species=dct["ignored_species"],
         )
 
     def _anonymous_match(
@@ -926,7 +932,7 @@ class StructureMatcher(MSONable):
             mapped_struct = struct1.copy()
             mapped_struct.replace_species(sp_mapping)  # type: ignore[arg-type]
             if swapped:
-                m = self._strict_match(
+                match = self._strict_match(
                     struct2,
                     mapped_struct,
                     fu,
@@ -935,9 +941,9 @@ class StructureMatcher(MSONable):
                     break_on_match,
                 )
             else:
-                m = self._strict_match(mapped_struct, struct2, fu, s1_supercell, use_rms, break_on_match)
-            if m:
-                matches.append((sp_mapping, m))
+                match = self._strict_match(mapped_struct, struct2, fu, s1_supercell, use_rms, break_on_match)
+            if match:
+                matches.append((sp_mapping, match))
                 if single_match:
                     break
         return matches
@@ -963,11 +969,10 @@ class StructureMatcher(MSONable):
             struct2 (Structure): 2nd structure
 
         Returns:
-            (min_rms, min_mapping)
-            min_rms is the minimum rms distance, and min_mapping is the
-            corresponding minimal species mapping that would map
-            struct1 to struct2. (None, None) is returned if the minimax_rms
-            exceeds the threshold.
+            tuple[float, float] | tuple[None, None]: 1st element is min_rms, 2nd is min_mapping.
+                min_rms is the minimum RMS distance, and min_mapping is the corresponding
+                minimal species mapping that would map struct1 to struct2. (None, None) is
+                returned if the minimax_rms exceeds the threshold.
         """
         struct1, struct2 = self._process_species([struct1, struct2])
         struct1, struct2, fu, s1_supercell = self._preprocess(struct1, struct2)
@@ -1093,9 +1098,9 @@ class StructureMatcher(MSONable):
             struct2 (Structure): Structure to transform.
 
         Returns:
-            supercell (numpy.ndarray(3, 3)): supercell matrix
-            vector (numpy.ndarray(3)): fractional translation vector
-            mapping (list(int or None)):
+            supercell (np.array(3, 3)): supercell matrix
+            vector (np.array(3)): fractional translation vector
+            mapping (list[int | None]):
                 The first len(struct1) items of the mapping vector are the
                 indices of struct1's corresponding sites in struct2 (or None
                 if there is no corresponding site), and the other items are
@@ -1160,10 +1165,10 @@ class StructureMatcher(MSONable):
         temp.make_supercell(sc)
         temp.translate_sites(list(range(len(temp))), t)
         # translate sites to correct unit cell
-        for i, j in enumerate(mapping[: len(s1)]):
-            if j is not None:
-                vec = np.round(struct1[i].frac_coords - temp[j].frac_coords)
-                temp.translate_sites(j, vec, to_unit_cell=False)
+        for ii, jj in enumerate(mapping[: len(s1)]):
+            if jj is not None:
+                vec = np.round(struct1[ii].frac_coords - temp[jj].frac_coords)
+                temp.translate_sites(jj, vec, to_unit_cell=False)
 
         sites = [temp.sites[i] for i in mapping if i is not None]
 

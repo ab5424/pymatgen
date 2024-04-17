@@ -18,13 +18,13 @@ __email__ = "rit001@eng.ucsd.edu"
 __date__ = "Aug 24, 2017"
 
 
-TEST_DIR = f"{TEST_FILES_DIR}/surface_tests"
+TEST_DIR = f"{TEST_FILES_DIR}/surfaces"
 
 
 class TestSlabEntry(PymatgenTest):
     def setUp(self):
-        with open(f"{TEST_DIR}/ucell_entries.txt") as ucell_entries:
-            ucell_entries = json.loads(ucell_entries.read())
+        with open(f"{TEST_DIR}/ucell_entries.txt") as file:
+            ucell_entries = json.loads(file.read())
         self.ucell_entries = ucell_entries
 
         # Load objects for O adsorption tests
@@ -57,8 +57,8 @@ class TestSlabEntry(PymatgenTest):
                         assert ads.Nsurfs_ads_in_slab == 1
 
                         # Determine the correct binding energy
-                        with open(f"{TEST_DIR}/isolated_O_entry.txt") as isolated_O_entry:
-                            isolated_O_entry = json.loads(isolated_O_entry.read())
+                        with open(f"{TEST_DIR}/isolated_O_entry.txt") as txt_file:
+                            isolated_O_entry = json.loads(txt_file.read())
                         O_cse = ComputedStructureEntry.from_dict(isolated_O_entry)
                         g_bind = (ads.energy - ml * clean.energy) / Nads - O_cse.energy_per_atom
                         assert g_bind == ads.gibbs_binding_energy()
@@ -113,16 +113,16 @@ class TestSlabEntry(PymatgenTest):
             for hkl in val:
                 for clean in self.metals_O_entry_dict[el][hkl]:
                     for ads in self.metals_O_entry_dict[el][hkl][clean]:
-                        s = ads.cleaned_up_slab
-                        assert s.composition.reduced_composition == clean.composition.reduced_composition
+                        slab_clean = ads.cleaned_up_slab
+                        assert slab_clean.composition.reduced_composition == clean.composition.reduced_composition
 
 
 class TestSurfaceEnergyPlotter(PymatgenTest):
     def setUp(self):
         entry_dict = get_entry_dict(f"{TEST_DIR}/Cu_entries.txt")
         self.Cu_entry_dict = entry_dict
-        with open(f"{TEST_DIR}/ucell_entries.txt") as ucell_entries:
-            ucell_entries = json.loads(ucell_entries.read())
+        with open(f"{TEST_DIR}/ucell_entries.txt") as file:
+            ucell_entries = json.loads(file.read())
 
         self.Cu_ucell_entry = ComputedStructureEntry.from_dict(ucell_entries["Cu"])
         self.Cu_analyzer = SurfaceEnergyPlotter(entry_dict, self.Cu_ucell_entry)
@@ -134,11 +134,7 @@ class TestSurfaceEnergyPlotter(PymatgenTest):
         self.Ni_analyzer = SurfaceEnergyPlotter(self.metals_O_entry_dict["Ni"], ucell_entry)
         ucell_entry = ComputedStructureEntry.from_dict(ucell_entries["Rh"])
         self.Rh_analyzer = SurfaceEnergyPlotter(self.metals_O_entry_dict["Rh"], ucell_entry)
-        self.Oads_analyzer_dict = {
-            "Pt": self.Pt_analyzer,
-            "Ni": self.Ni_analyzer,
-            "Rh": self.Rh_analyzer,
-        }
+        self.Oads_analyzer_dict = {"Pt": self.Pt_analyzer, "Ni": self.Ni_analyzer, "Rh": self.Rh_analyzer}
 
     def test_get_stable_entry_at_u(self):
         for plotter in self.Oads_analyzer_dict.values():
@@ -249,8 +245,8 @@ class TestSurfaceEnergyPlotter(PymatgenTest):
                 all_Pt_slab_entries.append(clean)
                 all_Pt_slab_entries.extend(Pt_entries[hkl][clean])
 
-        a = SurfaceEnergyPlotter(all_Pt_slab_entries, self.Pt_analyzer.ucell_entry)
-        assert type(a).__name__ == "SurfaceEnergyPlotter"
+        surf_ene_plotter = SurfaceEnergyPlotter(all_Pt_slab_entries, self.Pt_analyzer.ucell_entry)
+        assert surf_ene_plotter.list_of_chempots == self.Pt_analyzer.list_of_chempots
 
     # def test_monolayer_vs_BE(self):
     #     for el in self.Oads_analyzer_dict:
@@ -289,7 +285,7 @@ class TestSurfaceEnergyPlotter(PymatgenTest):
     #             plt = analyzer.chempot_vs_gamma_facet(hkl)
 
 
-class TestWorkfunctionAnalyzer(PymatgenTest):
+class TestWorkFunctionAnalyzer(PymatgenTest):
     def setUp(self):
         self.kwargs = {
             "poscar_filename": f"{TEST_DIR}/CONTCAR.relax1.gz",
@@ -311,8 +307,8 @@ class TestNanoscaleStability(PymatgenTest):
         # Load all entries
         La_hcp_entry_dict = get_entry_dict(f"{TEST_DIR}/La_hcp_entries.txt")
         La_fcc_entry_dict = get_entry_dict(f"{TEST_DIR}/La_fcc_entries.txt")
-        with open(f"{TEST_DIR}/ucell_entries.txt") as ucell_entries:
-            ucell_entries = json.loads(ucell_entries.read())
+        with open(f"{TEST_DIR}/ucell_entries.txt") as txt_file:
+            ucell_entries = json.loads(txt_file.read())
         La_hcp_ucell_entry = ComputedStructureEntry.from_dict(ucell_entries["La_hcp"])
         La_fcc_ucell_entry = ComputedStructureEntry.from_dict(ucell_entries["La_fcc"])
 
@@ -324,26 +320,26 @@ class TestNanoscaleStability(PymatgenTest):
     def test_stability_at_r(self):
         # Check that we have a different polymorph that is
         # stable below or above the equilibrium particle size
-        r = self.nanoscale_stability.solve_equilibrium_point(self.La_hcp_analyzer, self.La_fcc_analyzer) * 10
+        radius = self.nanoscale_stability.solve_equilibrium_point(self.La_hcp_analyzer, self.La_fcc_analyzer) * 10
 
         # hcp phase of La particle should be the stable
         # polymorph above the equilibrium radius
         hcp_wulff = self.La_hcp_analyzer.wulff_from_chempot()
         bulk = self.La_hcp_analyzer.ucell_entry
-        ghcp, rhcp = self.nanoscale_stability.wulff_gform_and_r(hcp_wulff, bulk, r + 10, from_sphere_area=True)
+        ghcp, _rhcp = self.nanoscale_stability.wulff_gform_and_r(hcp_wulff, bulk, radius + 10, from_sphere_area=True)
         fcc_wulff = self.La_fcc_analyzer.wulff_from_chempot()
         bulk = self.La_fcc_analyzer.ucell_entry
-        gfcc, rfcc = self.nanoscale_stability.wulff_gform_and_r(fcc_wulff, bulk, r + 10, from_sphere_area=True)
+        gfcc, _rfcc = self.nanoscale_stability.wulff_gform_and_r(fcc_wulff, bulk, radius + 10, from_sphere_area=True)
         assert gfcc > ghcp
 
         # fcc phase of La particle should be the stable
         # polymorph below the equilibrium radius
         hcp_wulff = self.La_hcp_analyzer.wulff_from_chempot()
         bulk = self.La_hcp_analyzer.ucell_entry
-        ghcp, rhcp = self.nanoscale_stability.wulff_gform_and_r(hcp_wulff, bulk, r - 10, from_sphere_area=True)
+        ghcp, _rhcp = self.nanoscale_stability.wulff_gform_and_r(hcp_wulff, bulk, radius - 10, from_sphere_area=True)
         fcc_wulff = self.La_fcc_analyzer.wulff_from_chempot()
         bulk = self.La_fcc_analyzer.ucell_entry
-        gfcc, rfcc = self.nanoscale_stability.wulff_gform_and_r(fcc_wulff, bulk, r - 10, from_sphere_area=True)
+        gfcc, _rfcc = self.nanoscale_stability.wulff_gform_and_r(fcc_wulff, bulk, radius - 10, from_sphere_area=True)
         assert gfcc < ghcp
 
     def test_scaled_wulff(self):
@@ -362,25 +358,25 @@ def get_entry_dict(filename):
     # helper to generate an entry_dict
 
     entry_dict = {}
-    with open(filename) as entries:
-        entries = json.loads(entries.read())
-    for k in entries:
-        n = k[25:]
+    with open(filename) as file:
+        entries = json.loads(file.read())
+    for entry in entries:
+        sub_str = entry[25:]
         miller_index = []
-        for i, s in enumerate(n):
-            if s == "_":
+        for idx, char in enumerate(sub_str):
+            if char == "_":
                 break
-            if s == "-":
+            if char == "-":
                 continue
-            t = int(s)
-            if n[i - 1] == "-":
+            t = int(char)
+            if sub_str[idx - 1] == "-":
                 t *= -1
             miller_index.append(t)
         hkl = tuple(miller_index)
         if hkl not in entry_dict:
             entry_dict[hkl] = {}
-        entry = ComputedStructureEntry.from_dict(entries[k])
-        entry_dict[hkl][SlabEntry(entry.structure, entry.energy, hkl, label=k)] = []
+        entry = ComputedStructureEntry.from_dict(entries[entry])
+        entry_dict[hkl][SlabEntry(entry.structure, entry.energy, hkl, label=entry)] = []
 
     return entry_dict
 
@@ -389,8 +385,8 @@ def load_O_adsorption():
     # Loads the dictionary for clean and O adsorbed Rh, Pt, and Ni entries
 
     # Load the adsorbate as an entry
-    with open(f"{TEST_DIR}/isolated_O_entry.txt") as isolated_O_entry:
-        isolated_O_entry = json.loads(isolated_O_entry.read())
+    with open(f"{TEST_DIR}/isolated_O_entry.txt") as file:
+        isolated_O_entry = json.loads(file.read())
     O_entry = ComputedStructureEntry.from_dict(isolated_O_entry)
 
     # entry_dict for the adsorption case, O adsorption on Ni, Rh and Pt
@@ -400,8 +396,8 @@ def load_O_adsorption():
         "Rh": {(1, 0, 0): {}},
     }
 
-    with open(f"{TEST_DIR}/cs_entries_slabs.json") as entries:
-        entries = json.loads(entries.read())
+    with open(f"{TEST_DIR}/cs_entries_slabs.json") as file:
+        entries = json.loads(file.read())
     for key in entries:
         entry = ComputedStructureEntry.from_dict(entries[key])
         for el in metals_O_entry_dict:
@@ -416,8 +412,8 @@ def load_O_adsorption():
                     clean = SlabEntry(entry.structure, entry.energy, (1, 0, 0), label=key + "_clean")
                     metals_O_entry_dict[el][(1, 0, 0)][clean] = []
 
-    with open(f"{TEST_DIR}/cs_entries_o_ads.json") as entries:
-        entries = json.loads(entries.read())
+    with open(f"{TEST_DIR}/cs_entries_o_ads.json") as file:
+        entries = json.loads(file.read())
     for key in entries:
         entry = ComputedStructureEntry.from_dict(entries[key])
         for el, val in metals_O_entry_dict.items():

@@ -6,10 +6,14 @@ calculate relevant properties of the stress tensor.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from pymatgen.core.tensors import SquareTensor
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 __author__ = "Joseph Montoya"
 __copyright__ = "Copyright 2012, The Materials Project"
@@ -29,7 +33,7 @@ class Stress(SquareTensor):
 
     symbol = "s"
 
-    def __new__(cls, stress_matrix):
+    def __new__(cls, stress_matrix) -> Self:
         """
         Create a Stress object. Note that the constructor uses __new__
         rather than __init__ according to the standard method of
@@ -81,10 +85,7 @@ class Stress(SquareTensor):
             def_grad (3x3 array-like): deformation gradient tensor
         """
         if not self.is_symmetric:
-            raise ValueError(
-                "The stress tensor is not symmetric, \
-                             PK stress is based on a symmetric stress tensor."
-            )
+            raise ValueError("The stress tensor is not symmetric, PK stress is based on a symmetric stress tensor.")
         def_grad = SquareTensor(def_grad)
         return def_grad.det * np.dot(self, def_grad.inv.trans)
 
@@ -97,8 +98,5 @@ class Stress(SquareTensor):
         """
         def_grad = SquareTensor(def_grad)
         if not self.is_symmetric:
-            raise ValueError(
-                "The stress tensor is not symmetric, \
-                             PK stress is based on a symmetric stress tensor."
-            )
+            raise ValueError("The stress tensor is not symmetric, PK stress is based on a symmetric stress tensor.")
         return def_grad.det * np.dot(np.dot(def_grad.inv, self), def_grad.inv.trans)

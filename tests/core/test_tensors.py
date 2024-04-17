@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 from monty.serialization import MontyDecoder, loadfn
-from numpy.testing import assert_allclose, assert_array_equal
+from numpy.testing import assert_allclose
 from pytest import approx
 
 from pymatgen.core.operations import SymmOp
@@ -137,27 +137,15 @@ class TestTensor(PymatgenTest):
         assert_allclose(
             new_tensor,
             [
-                [
-                    [-0.871, -2.884, -1.928],
-                    [-2.152, -6.665, -4.196],
-                    [-1.026, -2.830, -1.572],
-                ],
-                [
-                    [0.044, 1.531, 1.804],
-                    [4.263, 21.008, 17.928],
-                    [5.170, 23.026, 18.722],
-                ],
-                [
-                    [1.679, 7.268, 5.821],
-                    [9.268, 38.321, 29.919],
-                    [8.285, 33.651, 26.000],
-                ],
+                [[-0.871, -2.884, -1.928], [-2.152, -6.665, -4.196], [-1.026, -2.830, -1.572]],
+                [[0.044, 1.531, 1.804], [4.263, 21.008, 17.928], [5.170, 23.026, 18.722]],
+                [[1.679, 7.268, 5.821], [9.268, 38.321, 29.919], [8.285, 33.651, 26.000]],
             ],
             3,
         )
 
     def test_rotate(self):
-        assert_array_equal(self.vec.rotate([[0, -1, 0], [1, 0, 0], [0, 0, 1]]), [0, 1, 0])
+        assert self.vec.rotate([[0, -1, 0], [1, 0, 0], [0, 0, 1]]).tolist() == [0, 1, 0]
         assert_allclose(
             self.non_symm.rotate(self.rotation),
             SquareTensor([[0.531, 0.485, 0.271], [0.700, 0.5, 0.172], [0.171, 0.233, 0.068]]),
@@ -272,7 +260,7 @@ class TestTensor(PymatgenTest):
         reconstructed = []
         for k, v in reduced.items():
             reconstructed.extend([k.voigt] + [k.transform(op).voigt for op in v])
-        reconstructed = sorted(reconstructed, key=lambda x: np.argmax(x))
+        reconstructed = sorted(reconstructed, key=np.argmax)
         assert_allclose(list(reconstructed), np.eye(6) * 0.01)
 
     def test_tensor_mapping(self):
@@ -347,12 +335,12 @@ class TestTensor(PymatgenTest):
 
     def test_serialization(self):
         # Test base serialize-deserialize
-        d = self.symm_rank2.as_dict()
-        new = Tensor.from_dict(d)
+        dct = self.symm_rank2.as_dict()
+        new = Tensor.from_dict(dct)
         assert_allclose(new, self.symm_rank2)
 
-        d = self.symm_rank3.as_dict(voigt=True)
-        new = Tensor.from_dict(d)
+        dct = self.symm_rank3.as_dict(voigt=True)
+        new = Tensor.from_dict(dct)
         assert_allclose(new, self.symm_rank3)
 
     def test_projection_methods(self):
@@ -555,9 +543,9 @@ class TestSquareTensor(PymatgenTest):
         assert self.non_symm.get_scaled(10) == approx(SquareTensor([[1, 2, 3], [4, 5, 6], [2, 5, 5]]))
 
     def test_polar_decomposition(self):
-        u, p = self.rand_sqtensor.polar_decomposition()
-        assert_allclose(np.dot(u, p), self.rand_sqtensor)
-        assert_allclose(np.eye(3), np.dot(u, np.conjugate(np.transpose(u))), atol=1e-9)
+        u_mat, p_mat = self.rand_sqtensor.polar_decomposition()
+        assert_allclose(np.dot(u_mat, p_mat), self.rand_sqtensor)
+        assert_allclose(np.eye(3), np.dot(u_mat, np.conjugate(np.transpose(u_mat))), atol=1e-9)
 
     def test_serialization(self):
         # Test base serialize-deserialize

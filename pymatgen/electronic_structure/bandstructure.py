@@ -7,16 +7,18 @@ import itertools
 import math
 import re
 import warnings
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from monty.json import MSONable
 
-from pymatgen.core.lattice import Lattice
-from pymatgen.core.periodic_table import Element, get_el_sp
-from pymatgen.core.structure import Structure
+from pymatgen.core import Element, Lattice, Structure, get_el_sp
 from pymatgen.electronic_structure.core import Orbital, Spin
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.util.coord import pbc_diff
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 __author__ = "Geoffroy Hautier, Shyue Ping Ong, Michael Kocher"
 __copyright__ = "Copyright 2012, The Materials Project"
@@ -35,12 +37,12 @@ class Kpoint(MSONable):
 
     def __init__(
         self,
-        coords,
-        lattice,
-        to_unit_cell=False,
-        coords_are_cartesian=False,
-        label=None,
-    ):
+        coords: np.ndarray,
+        lattice: Lattice,
+        to_unit_cell: bool = False,
+        coords_are_cartesian: bool = False,
+        label: str | None = None,
+    ) -> None:
         """
         Args:
             coords: coordinate of the kpoint as a numpy array
@@ -64,47 +66,62 @@ class Kpoint(MSONable):
         self._cart_coords = lattice.get_cartesian_coords(self._frac_coords)
 
     @property
-    def lattice(self):
+    def lattice(self) -> Lattice:
         """The lattice associated with the kpoint. It's a
         pymatgen.core.Lattice object.
         """
         return self._lattice
 
     @property
-    def label(self):
+    def label(self) -> str | None:
         """The label associated with the kpoint."""
         return self._label
 
+    @label.setter
+    def label(self, label: str | None) -> None:
+        """Set the label of the kpoint."""
+        self._label = label
+
     @property
-    def frac_coords(self):
+    def frac_coords(self) -> np.ndarray:
         """The fractional coordinates of the kpoint as a numpy array."""
         return np.copy(self._frac_coords)
 
     @property
-    def cart_coords(self):
+    def cart_coords(self) -> np.ndarray:
         """The Cartesian coordinates of the kpoint as a numpy array."""
         return np.copy(self._cart_coords)
 
     @property
-    def a(self):
+    def a(self) -> float:
         """Fractional a coordinate of the kpoint."""
         return self._frac_coords[0]
 
     @property
-    def b(self):
+    def b(self) -> float:
         """Fractional b coordinate of the kpoint."""
         return self._frac_coords[1]
 
     @property
-    def c(self):
+    def c(self) -> float:
         """Fractional c coordinate of the kpoint."""
         return self._frac_coords[2]
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Returns a string with fractional, Cartesian coordinates and label."""
         return f"{self.frac_coords} {self.cart_coords} {self.label}"
 
-    def as_dict(self):
+    def __eq__(self, other: object) -> bool:
+        """Check if two kpoints are equal."""
+        if not isinstance(other, Kpoint):
+            return NotImplemented
+        return (
+            np.allclose(self.frac_coords, other.frac_coords)
+            and self.lattice == other.lattice
+            and self.label == other.label
+        )
+
+    def as_dict(self) -> dict[str, Any]:
         """JSON-serializable dict representation of a kpoint."""
         return {
             "lattice": self.lattice.as_dict(),
@@ -116,21 +133,17 @@ class Kpoint(MSONable):
         }
 
     @classmethod
-    def from_dict(cls, dct):
+    def from_dict(cls, dct: dict) -> Self:
         """Create from dict.
 
         Args:
             dct (dict): A dict with all data for a kpoint object.
 
         Returns:
-            A Kpoint object
+            Kpoint
         """
-        return cls(
-            coords=dct["fcoords"],
-            lattice=Lattice.from_dict(dct["lattice"]),
-            coords_are_cartesian=False,
-            label=dct["label"],
-        )
+        lattice = Lattice.from_dict(dct["lattice"])
+        return cls(coords=dct["fcoords"], lattice=lattice, coords_are_cartesian=False, label=dct["label"])
 
 
 class BandStructure:
@@ -142,14 +155,14 @@ class BandStructure:
         lattice_rec (Lattice): The reciprocal lattice of the band structure.
         efermi (float): The Fermi energy.
         is_spin_polarized (bool): True if the band structure is spin-polarized.
-        bands (dict): The energy eigenvalues as a {spin: ndarray}. Note that the use of an
-            ndarray is necessary for computational as well as memory efficiency due to the large
-            amount of numerical data. The indices of the ndarray are [band_index, kpoint_index].
+        bands (dict): The energy eigenvalues as a {spin: array}. Note that the use of an
+            array is necessary for computational as well as memory efficiency due to the large
+            amount of numerical data. The indices of the array are [band_index, kpoint_index].
         nb_bands (int): Returns the number of bands in the band structure.
         structure (Structure): Returns the structure.
-        projections (dict): The projections as a {spin: ndarray}. Note that the use of an
-            ndarray is necessary for computational as well as memory efficiency due to the large
-            amount of numerical data. The indices of the ndarray are [band_index, kpoint_index,
+        projections (dict): The projections as a {spin: array}. Note that the use of an
+            array is necessary for computational as well as memory efficiency due to the large
+            amount of numerical data. The indices of the array are [band_index, kpoint_index,
             orbital_index, ion_index].
     """
 
@@ -177,15 +190,15 @@ class BandStructure:
             lattice: The reciprocal lattice as a pymatgen Lattice object.
                 Pymatgen uses the physics convention of reciprocal lattice vectors
                 WITH a 2*pi coefficient
-            efermi (float): fermi energy
+            efermi (float): Fermi energy
             labels_dict: (dict) of {} this links a kpoint (in frac coords or
                 Cartesian coordinates depending on the coords) to a label.
             coords_are_cartesian: Whether coordinates are cartesian.
             structure: The crystal structure (as a pymatgen Structure object)
                 associated with the band structure. This is needed if we
                 provide projections to the band structure
-            projections: dict of orbital projections as {spin: ndarray}. The
-                indices of the ndarrayare [band_index, kpoint_index, orbital_index,
+            projections: dict of orbital projections as {spin: array}. The
+                indices of the array are [band_index, kpoint_index, orbital_index,
                 ion_index].If the band structure is not spin polarized, we only
                 store one data set under Spin.up.
         """
@@ -201,7 +214,7 @@ class BandStructure:
             labels_dict = {}
 
         if len(self.projections) != 0 and self.structure is None:
-            raise Exception("if projections are provided a structure object needs also to be given")
+            raise RuntimeError("if projections are provided a structure object is also required")
 
         for k in kpoints:
             # let see if this kpoint has been assigned a label
@@ -224,8 +237,8 @@ class BandStructure:
         """Method returning a dictionary of projections on elements.
 
         Returns:
-            a dictionary in the {Spin.up:[][{Element:values}],
-            Spin.down:[][{Element:values}]} format
+            a dictionary in the {Spin.up:[][{Element: [values]}],
+            Spin.down:[][{Element: [values]}]} format
             if there is no projections in the band structure
             returns an empty dict
         """
@@ -256,8 +269,7 @@ class BandStructure:
             A dictionary of projections on elements in the
             {Spin.up:[][{Element:{orb:values}}],
             Spin.down:[][{Element:{orb:values}}]} format
-            if there is no projections in the band structure returns an empty
-            dict.
+            if there is no projections in the band structure returns an empty dict.
         """
         result = {}
         structure = self.structure
@@ -287,11 +299,9 @@ class BandStructure:
         Returns:
             bool: True if a metal.
         """
-        for values in self.bands.values():
+        for vals in self.bands.values():
             for idx in range(self.nb_bands):
-                if np.any(values[idx, :] - self.efermi < -efermi_tol) and np.any(
-                    values[idx, :] - self.efermi > efermi_tol
-                ):
+                if np.any(vals[idx, :] - self.efermi < -efermi_tol) and np.any(vals[idx, :] - self.efermi > efermi_tol):
                     return True
         return False
 
@@ -363,22 +373,21 @@ class BandStructure:
         """Returns data about the CBM.
 
         Returns:
-            {"band_index","kpoint_index","kpoint","energy"}
-            - "band_index": A dict with spin keys pointing to a list of the
-            indices of the band containing the CBM (please note that you
-            can have several bands sharing the CBM) {Spin.up:[],
-            Spin.down:[]}
-            - "kpoint_index": The list of indices in self.kpoints for the
-            kpoint CBM. Please note that there can be several
-            kpoint_indices relating to the same kpoint (e.g., Gamma can
-            occur at different spots in the band structure line plot)
-            - "kpoint": The kpoint (as a kpoint object)
-            - "energy": The energy of the CBM
-            - "projections": The projections along sites and orbitals of the
-            CBM if any projection data is available (else it is an empty
-            dictionary). The format is similar to the projections field in
-            BandStructure: {spin:{'Orbital': [proj]}} where the array
-            [proj] is ordered according to the sites in structure
+            dict[str, Any]: with keys band_index, kpoint_index, kpoint, energy.
+                - "band_index": A dict with spin keys pointing to a list of the
+                indices of the band containing the CBM (please note that you
+                can have several bands sharing the CBM) {Spin.up:[], Spin.down:[]}
+                - "kpoint_index": The list of indices in self.kpoints for the
+                kpoint CBM. Please note that there can be several
+                kpoint_indices relating to the same kpoint (e.g., Gamma can
+                occur at different spots in the band structure line plot)
+                - "kpoint": The kpoint (as a kpoint object)
+                - "energy": The energy of the CBM
+                - "projections": The projections along sites and orbitals of the
+                CBM if any projection data is available (else it is an empty
+                dictionary). The format is similar to the projections field in
+                BandStructure: {spin:{'Orbital': [proj]}} where the array
+                [proj] is ordered according to the sites in structure
         """
         if self.is_metal():
             return {
@@ -450,9 +459,7 @@ class BandStructure:
 
         result["transition"] = "-".join(
             [
-                str(c.label)
-                if c.label is not None
-                else "(" + ",".join(f"{c.frac_coords[i]:.3f}" for i in range(3)) + ")"
+                str(c.label) if c.label is not None else f"({','.join(f'{c.frac_coords[i]:.3f}' for i in range(3))})"
                 for c in [vbm["kpoint"], cbm["kpoint"]]
             ]
         )
@@ -508,7 +515,7 @@ class BandStructure:
             tol (float): tolerance below which coordinates are considered equal
 
         Returns:
-            ([1x3 array] or None): if structure is not available returns None
+            list[1x3 array] | None: if structure is not available returns None
         """
         if not self.structure:
             return None
@@ -533,7 +540,7 @@ class BandStructure:
             tol (float): tolerance below which coordinates are considered equal.
 
         Returns:
-            (int or None): degeneracy or None if structure is not available
+            int | None: degeneracy or None if structure is not available
         """
         all_kpts = self.get_sym_eq_kpoints(kpoint, cartesian, tol=tol)
         if all_kpts is not None:
@@ -585,7 +592,7 @@ class BandStructure:
         return dct
 
     @classmethod
-    def from_dict(cls, dct):
+    def from_dict(cls, dct: dict) -> Self:
         """Create from dict.
 
         Args:
@@ -633,7 +640,7 @@ class BandStructure:
             return cls.from_old_dict(dct)
 
     @classmethod
-    def from_old_dict(cls, dct):
+    def from_old_dict(cls, dct) -> Self:
         """
         Args:
             dct (dict): A dict with all data for a band structure symmetry line object.
@@ -643,7 +650,7 @@ class BandStructure:
         """
         # Strip the label to recover initial string (see trick used in as_dict to handle $ chars)
         labels_dict = {k.strip(): v for k, v in dct["labels_dict"].items()}
-        projections = {}
+        projections: dict = {}
         structure = None
         if dct.get("projections"):
             structure = Structure.from_dict(dct["structure"])
@@ -664,7 +671,7 @@ class BandStructure:
                     dd.append(np.array(ddd))
                 projections[Spin(int(spin))] = np.array(dd)
 
-        return BandStructure(
+        return cls(
             dct["kpoints"],
             {Spin(int(k)): dct["bands"][k] for k in dct["bands"]},
             Lattice(dct["lattice_rec"]["matrix"]),
@@ -691,7 +698,7 @@ class BandStructureSymmLine(BandStructure, MSONable):
         coords_are_cartesian=False,
         structure=None,
         projections=None,
-    ):
+    ) -> None:
         """
         Args:
             kpoints: list of kpoint as numpy arrays, in frac_coords of the
@@ -712,8 +719,8 @@ class BandStructureSymmLine(BandStructure, MSONable):
             structure: The crystal structure (as a pymatgen Structure object)
                 associated with the band structure. This is needed if we
                 provide projections to the band structure.
-            projections: dict of orbital projections as {spin: ndarray}. The
-                indices of the ndarray are [band_index, kpoint_index, orbital_index,
+            projections: dict of orbital projections as {spin: array}. The
+                indices of the array are [band_index, kpoint_index, orbital_index,
                 ion_index].If the band structure is not spin polarized, we only
                 store one data set under Spin.up.
         """
@@ -729,7 +736,7 @@ class BandStructureSymmLine(BandStructure, MSONable):
         )
         self.distance = []
         self.branches = []
-        one_group = []
+        one_group: list = []
         branches_tmp = []
         # get labels and distance for each kpoint
         previous_kpoint = self.kpoints[0]
@@ -779,7 +786,7 @@ class BandStructureSymmLine(BandStructure, MSONable):
         TODO: now it uses the label we might want to use coordinates instead
         (in case there was a mislabel)
         """
-        # if the kpoint has no label it can"t have a repetition along the band
+        # if the kpoint has no label it can't have a repetition along the band
         # structure line object
 
         if self.kpoints[index].label is None:
@@ -927,7 +934,7 @@ class LobsterBandStructureSymmLine(BandStructureSymmLine):
         return dct
 
     @classmethod
-    def from_dict(cls, dct):
+    def from_dict(cls, dct: dict) -> Self:
         """
         Args:
             dct (dict): A dict with all data for a band structure symmetry line
@@ -947,7 +954,7 @@ class LobsterBandStructureSymmLine(BandStructureSymmLine):
                 structure = Structure.from_dict(dct["structure"])
                 projections = {Spin(int(spin)): np.array(v) for spin, v in dct["projections"].items()}
 
-            return LobsterBandStructureSymmLine(
+            return cls(
                 dct["kpoints"],
                 {Spin(int(k)): dct["bands"][k] for k in dct["bands"]},
                 Lattice(dct["lattice_rec"]["matrix"]),
@@ -963,10 +970,10 @@ class LobsterBandStructureSymmLine(BandStructureSymmLine):
                 "format. The old format will be retired in pymatgen "
                 "5.0."
             )
-            return LobsterBandStructureSymmLine.from_old_dict(dct)
+            return cls.from_old_dict(dct)
 
     @classmethod
-    def from_old_dict(cls, dct):
+    def from_old_dict(cls, dct) -> Self:
         """
         Args:
             dct (dict): A dict with all data for a band structure symmetry line
@@ -977,7 +984,7 @@ class LobsterBandStructureSymmLine(BandStructureSymmLine):
         """
         # Strip the label to recover initial string (see trick used in as_dict to handle $ chars)
         labels_dict = {k.strip(): v for k, v in dct["labels_dict"].items()}
-        projections = {}
+        projections: dict = {}
         structure = None
         if "projections" in dct and len(dct["projections"]) != 0:
             structure = Structure.from_dict(dct["structure"])
@@ -991,7 +998,7 @@ class LobsterBandStructureSymmLine(BandStructureSymmLine):
                     dd.append(np.array(ddd))
                 projections[Spin(int(spin))] = np.array(dd)
 
-        return LobsterBandStructureSymmLine(
+        return cls(
             dct["kpoints"],
             {Spin(int(k)): dct["bands"][k] for k in dct["bands"]},
             Lattice(dct["lattice_rec"]["matrix"]),

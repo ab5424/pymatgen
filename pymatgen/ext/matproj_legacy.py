@@ -23,12 +23,10 @@ from monty.json import MontyDecoder, MontyEncoder
 from ruamel.yaml import YAML
 from tqdm import tqdm
 
-from pymatgen.core import SETTINGS
+from pymatgen.core import SETTINGS, Composition, Element, Structure
 from pymatgen.core import __version__ as PMG_VERSION
-from pymatgen.core.composition import Composition
-from pymatgen.core.periodic_table import Element
-from pymatgen.core.structure import Structure
 from pymatgen.core.surface import get_symmetrically_equivalent_miller_indices
+from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
 from pymatgen.entries.computed_entries import ComputedEntry, ComputedStructureEntry
 from pymatgen.entries.exp_entries import ExpEntry
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -37,8 +35,11 @@ from pymatgen.util.due import Doi, due
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from typing_extensions import Self
+
     from pymatgen.phonon.bandstructure import PhononBandStructureSymmLine
     from pymatgen.phonon.dos import CompletePhononDos
+
 logger = logging.getLogger(__name__)
 MP_LOG_FILE = os.path.join(os.path.expanduser("~"), ".mprester.log.yaml")
 
@@ -195,8 +196,8 @@ class _MPResterLegacy:
             logger.debug(f"Connection established to Materials Project database, version {db_version}.")
 
             try:
-                with open(MP_LOG_FILE) as f:
-                    dct = dict(yaml.load(f)) or {}
+                with open(MP_LOG_FILE) as file:
+                    dct = dict(yaml.load(file)) or {}
             except (OSError, TypeError):
                 # TypeError: 'NoneType' object is not iterable occurs if MP_LOG_FILE exists but is empty
                 dct = {}
@@ -230,12 +231,12 @@ class _MPResterLegacy:
             # base Exception is not ideal (perhaps a PermissionError, etc.) but this is not critical
             # and should be allowed to fail regardless of reason
             try:
-                with open(MP_LOG_FILE, "w") as f:
-                    yaml.dump(dct, f)
+                with open(MP_LOG_FILE, mode="w") as file:
+                    yaml.dump(dct, file)
             except Exception:
                 pass
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         """Support for "with" context."""
         return self
 
@@ -346,7 +347,7 @@ class _MPResterLegacy:
                 or formula (e.g., Fe2O3).
 
         Returns:
-            ([str]) List of all materials ids.
+            list[str]: all materials ids.
         """
         return self._make_request(f"/materials/{chemsys_formula}/mids", mp_decode=False)
 
@@ -452,10 +453,10 @@ class _MPResterLegacy:
         payload = {"structure": json.dumps(struct.as_dict(), cls=MontyEncoder)}
         response = self.session.post(f"{self.preamble}/find_structure", data=payload)
         if response.status_code in [200, 400]:
-            resp = json.loads(response.text, cls=MontyDecoder)
-            if resp["valid_response"]:
-                return resp["response"]
-            raise MPRestError(resp["error"])
+            response = json.loads(response.text, cls=MontyDecoder)
+            if response["valid_response"]:
+                return response["response"]
+            raise MPRestError(response["error"])
         raise MPRestError(f"REST error with status code {response.status_code} and error {response.text}")
 
     def get_entries(
@@ -560,8 +561,6 @@ class _MPResterLegacy:
                 )
             entries.append(e)
         if compatible_only:
-            from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
-
             # suppress the warning about missing oxidation states
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message="Failed to guess oxidation states.*")
@@ -584,7 +583,6 @@ class _MPResterLegacy:
                 Default: MaterialsProject2020Compatibility
         """
         # imports are not top-level due to expense
-
         from pymatgen.analysis.phase_diagram import PhaseDiagram
         from pymatgen.analysis.pourbaix_diagram import IonEntry, PourbaixEntry
         from pymatgen.core.ion import Ion
@@ -641,7 +639,7 @@ class _MPResterLegacy:
         # position the ion energies relative to most stable reference state
         for n, i_d in enumerate(ion_data):
             ion = Ion.from_formula(i_d["Name"])
-            refs = [e for e in ion_ref_entries if e.composition.reduced_formula == i_d["Reference Solid"]]
+            refs = [e for e in ion_ref_entries if e.reduced_formula == i_d["Reference Solid"]]
             if not refs:
                 raise ValueError("Reference solid not contained in entry list")
             stable_ref = sorted(refs, key=lambda x: x.data["e_above_hull"])[0]
@@ -997,30 +995,28 @@ class _MPResterLegacy:
             return self._make_request("/query", payload=payload, method="POST", mp_decode=mp_decode)
 
         data = []
-        mids = [d["material_id"] for d in self.query(criteria, ["material_id"], chunk_size=0)]
+        mids = [dct["material_id"] for dct in self.query(criteria, ["material_id"], chunk_size=0)]
         chunks = get_chunks(mids, size=chunk_size)
         progress_bar = tqdm(total=len(mids), disable=not show_progress_bar)
         for chunk in chunks:
             chunk_criteria = criteria.copy()
             chunk_criteria.update({"material_id": {"$in": chunk}})
-            num_tries = 0
-            while num_tries < max_tries_per_chunk:
+            n_tries = 0
+            while n_tries < max_tries_per_chunk:
                 try:
-                    data.extend(
-                        self.query(
-                            chunk_criteria,
-                            properties,
-                            chunk_size=0,
-                            mp_decode=mp_decode,
-                        )
+                    data += self.query(
+                        chunk_criteria,
+                        properties,
+                        chunk_size=0,
+                        mp_decode=mp_decode,
                     )
                     break
-                except MPRestError as e:
-                    match = re.search(r"error status code (\d+)", str(e))
+                except MPRestError as exc:
+                    match = re.search(r"error status code (\d+)", str(exc))
                     if match:
                         if not match.group(1).startswith("5"):
-                            raise e
-                        num_tries += 1
+                            raise exc
+                        n_tries += 1
                         print(
                             "Unknown server error. Trying again in five "
                             f"seconds (will try at most {max_tries_per_chunk} times)..."
@@ -1103,16 +1099,16 @@ class _MPResterLegacy:
             MPRestError
         """
         snl = snl if isinstance(snl, list) else [snl]
-        jsondata = [s.as_dict() for s in snl]
-        payload = {"snl": json.dumps(jsondata, cls=MontyEncoder)}
+        json_data = [s.as_dict() for s in snl]
+        payload = {"snl": json.dumps(json_data, cls=MontyEncoder)}
         response = self.session.post(f"{self.preamble}/snl/submit", data=payload)
         if response.status_code in [200, 400]:
-            resp = json.loads(response.text, cls=MontyDecoder)
-            if resp["valid_response"]:
-                if resp.get("warning"):
-                    warnings.warn(resp["warning"])
-                return resp["inserted_ids"]
-            raise MPRestError(resp["error"])
+            response = json.loads(response.text, cls=MontyDecoder)
+            if response["valid_response"]:
+                if response.get("warning"):
+                    warnings.warn(response["warning"])
+                return response["inserted_ids"]
+            raise MPRestError(response["error"])
 
         raise MPRestError(f"REST error with status code {response.status_code} and error {response.text}")
 
@@ -1133,12 +1129,12 @@ class _MPResterLegacy:
         response = self.session.post(f"{self.preamble}/snl/delete", data=payload)
 
         if response.status_code in [200, 400]:
-            resp = json.loads(response.text, cls=MontyDecoder)
-            if resp["valid_response"]:
-                if resp.get("warning"):
-                    warnings.warn(resp["warning"])
-                return resp
-            raise MPRestError(resp["error"])
+            response = json.loads(response.text, cls=MontyDecoder)
+            if response["valid_response"]:
+                if response.get("warning"):
+                    warnings.warn(response["warning"])
+                return response
+            raise MPRestError(response["error"])
 
         raise MPRestError(f"REST error with status code {response.status_code} and error {response.text}")
 
@@ -1161,12 +1157,12 @@ class _MPResterLegacy:
         payload = {"criteria": json.dumps(criteria)}
         response = self.session.post(f"{self.preamble}/snl/query", data=payload)
         if response.status_code in [200, 400]:
-            resp = json.loads(response.text)
-            if resp["valid_response"]:
-                if resp.get("warning"):
-                    warnings.warn(resp["warning"])
-                return resp["response"]
-            raise MPRestError(resp["error"])
+            response = json.loads(response.text)
+            if response["valid_response"]:
+                if response.get("warning"):
+                    warnings.warn(response["warning"])
+                return response["response"]
+            raise MPRestError(response["error"])
 
         raise MPRestError(f"REST error with status code {response.status_code} and error {response.text}")
 
@@ -1224,7 +1220,7 @@ class _MPResterLegacy:
         histories = []
         for e in queen.get_data():
             structures.append(e.structure)
-            m = {
+            meta_dict = {
                 "_vasp": {
                     "parameters": e.parameters,
                     "final_energy": e.energy,
@@ -1235,8 +1231,8 @@ class _MPResterLegacy:
             if "history" in e.parameters:
                 histories.append(e.parameters["history"])
             if master_data is not None:
-                m.update(master_data)
-            metadata.append(m)
+                meta_dict.update(master_data)
+            metadata.append(meta_dict)
         if master_history is not None:
             histories = master_history * len(structures)
 
@@ -1259,12 +1255,12 @@ class _MPResterLegacy:
             data=payload,
         )
         if response.status_code in [200, 400]:
-            resp = json.loads(response.text, cls=MontyDecoder)
-            if resp["valid_response"]:
-                if resp.get("warning"):
-                    warnings.warn(resp["warning"])
-                return resp["response"]
-            raise MPRestError(resp["error"])
+            response = json.loads(response.text, cls=MontyDecoder)
+            if response["valid_response"]:
+                if response.get("warning"):
+                    warnings.warn(response["warning"])
+                return response["response"]
+            raise MPRestError(response["error"])
         raise MPRestError(f"REST error with status code {response.status_code} and error {response.text}")
 
     def get_cohesive_energy(self, material_id, per_atom=False):
@@ -1513,7 +1509,7 @@ class _MPResterLegacy:
             metadata info, e.g. the task/external_ids that belong to a directory
         """
         # task_id's correspond to NoMaD external_id's
-        task_types = [t.value for t in task_types if isinstance(t, TaskType)] if task_types else []
+        task_types = [typ.value for typ in (task_types or []) if isinstance(typ, TaskType)]
 
         meta = {}
         for doc in self.query({"task_id": {"$in": material_ids}}, ["task_id", "blessed_tasks"]):
@@ -1539,7 +1535,7 @@ class _MPResterLegacy:
                 prefix += f"{file_pattern=}&"
         prefix += "external_id="
 
-        task_ids = [t["task_id"] for tl in meta.values() for t in tl]
+        task_ids = [task["task_id"] for task_list in meta.values() for task in task_list]
         nomad_exist_task_ids = self._check_get_download_info_url_by_task_id(prefix=prefix, task_ids=task_ids)
         if len(nomad_exist_task_ids) != len(task_ids):
             self._print_help_message(nomad_exist_task_ids, task_ids, file_patterns, task_types)
@@ -1608,9 +1604,9 @@ class _MPResterLegacy:
         def parse_sym(sym):
             if sym == "*":
                 return [el.symbol for el in Element]
-            m = re.match(r"\{(.*)\}", sym)
-            if m:
-                return [s.strip() for s in m.group(1).split(",")]
+
+            if match := re.match(r"\{(.*)\}", sym):
+                return [s.strip() for s in match.group(1).split(",")]
             return [sym]
 
         def parse_tok(t):
@@ -1632,18 +1628,18 @@ class _MPResterLegacy:
                 if ("*" in sym) or ("{" in sym):
                     wild_card_els.append(sym)
                 else:
-                    m = re.match(r"([A-Z][a-z]*)[\.\d]*", sym)
-                    explicit_els.append(m.group(1))
+                    match = re.match(r"([A-Z][a-z]*)[\.\d]*", sym)
+                    explicit_els.append(match[1])
             n_elements = len(wild_card_els) + len(set(explicit_els))
             parts = re.split(r"(\*|\{.*\})", t)
             parts = [parse_sym(s) for s in parts if s != ""]
-            for f in itertools.product(*parts):
-                c = Composition("".join(f))
-                if len(c) == n_elements:
+            for formula in itertools.product(*parts):
+                comp = Composition("".join(formula))
+                if len(comp) == n_elements:
                     # Check for valid Elements in keys.
-                    for e in c:
-                        Element(e.symbol)
-                    all_formulas.add(c.reduced_formula)
+                    for elem in comp:
+                        Element(elem.symbol)
+                    all_formulas.add(comp.reduced_formula)
             return {"pretty_formula": {"$in": list(all_formulas)}}
 
         if len(tokens) == 1:
@@ -1664,5 +1660,5 @@ def get_chunks(sequence: Sequence[Any], size=1):
     Returns:
         list[Sequence[Any]]: input sequence in chunks of length size.
     """
-    chunks = int(math.ceil(len(sequence) / float(size)))
+    chunks = math.ceil(len(sequence) / float(size))
     return [sequence[i * size : (i + 1) * size] for i in range(chunks)]

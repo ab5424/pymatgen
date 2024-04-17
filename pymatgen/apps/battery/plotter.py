@@ -1,6 +1,5 @@
 """This module provides plotting capabilities for battery related applications."""
 
-
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
@@ -99,14 +98,14 @@ class VoltageProfilePlotter:
         working_ion_symbols = set()
         formula = set()
 
-        for label, electrode in self._electrodes.items():
+        for key, electrode in self._electrodes.items():
             x, y = self.get_plot_data(electrode, term_zero=term_zero)
             working_ion_symbols.add(electrode.working_ion.symbol)
             formula.add(electrode.framework_formula)
-            ax.plot(x, y, "-", linewidth=2, label=label)
+            ax.plot(x, y, "-", linewidth=2, label=key)
 
         ax.legend()
-        ax.set_xlabel(self._choose_best_x_label(formula=formula, wion_symbol=working_ion_symbols))
+        ax.set_xlabel(self._choose_best_x_label(formula=formula, work_ion_symbol=working_ion_symbols))
         ax.set_ylabel("Voltage (V)")
         plt.tight_layout()
         return ax
@@ -134,7 +133,7 @@ class VoltageProfilePlotter:
         data = []
         working_ion_symbols = set()
         formula = set()
-        for label, electrode in self._electrodes.items():
+        for key, electrode in self._electrodes.items():
             x, y = self.get_plot_data(electrode, term_zero=term_zero)
             working_ion_symbols.add(electrode.working_ion.symbol)
             formula.add(electrode.framework_formula)
@@ -146,7 +145,7 @@ class VoltageProfilePlotter:
                     plot_y.append(None)
                 plot_x.append(x[i])
                 plot_y.append(y[i])
-            data.append(go.Scatter(x=plot_x, y=plot_y, name=label, hovertemplate=hover_temp))
+            data.append(go.Scatter(x=plot_x, y=plot_y, name=key, hovertemplate=hover_temp))
 
         fig = go.Figure(
             data=data,
@@ -155,7 +154,7 @@ class VoltageProfilePlotter:
                 width=width,
                 height=height,
                 font=font_dict,
-                xaxis={"title": self._choose_best_x_label(formula=formula, wion_symbol=working_ion_symbols)},
+                xaxis={"title": self._choose_best_x_label(formula=formula, work_ion_symbol=working_ion_symbols)},
                 yaxis={"title": "Voltage (V)"},
                 **kwargs,
             ),
@@ -164,7 +163,7 @@ class VoltageProfilePlotter:
         fig.update_layout(template="plotly_white", title_x=0.5)
         return fig
 
-    def _choose_best_x_label(self, formula, wion_symbol):
+    def _choose_best_x_label(self, formula, work_ion_symbol):
         if self.xaxis in {"capacity", "capacity_grav"}:
             return "Capacity (mAh/g)"
         if self.xaxis == "capacity_vol":
@@ -172,16 +171,16 @@ class VoltageProfilePlotter:
 
         formula = formula.pop() if len(formula) == 1 else None
 
-        wion_symbol = wion_symbol.pop() if len(wion_symbol) == 1 else None
+        work_ion_symbol = work_ion_symbol.pop() if len(work_ion_symbol) == 1 else None
 
         if self.xaxis == "x_form":
-            if formula and wion_symbol:
-                return f"x in {wion_symbol}<sub>x</sub>{formula}"
-            return "x Workion Ion per Host F.U."
+            if formula and work_ion_symbol:
+                return f"x in {work_ion_symbol}<sub>x</sub>{formula}"
+            return "x Work Ion per Host F.U."
 
         if self.xaxis == "frac_x":
-            if wion_symbol:
-                return f"Atomic Fraction of {wion_symbol}"
+            if work_ion_symbol:
+                return f"Atomic Fraction of {work_ion_symbol}"
             return "Atomic Fraction of Working Ion"
         raise RuntimeError("No xaxis label can be determined")
 
@@ -194,13 +193,12 @@ class VoltageProfilePlotter:
         """
         self.get_plot(width, height).show()
 
-    def save(self, filename, image_format="eps", width=8, height=6):
+    def save(self, filename: str, width: float = 8, height: float = 6) -> None:
         """Save the plot to an image file.
 
         Args:
-            filename: Filename to save to.
-            image_format: Format to save to. Defaults to eps.
+            filename (str): Filename to save to. Must include extension to specify image format.
             width: Width of the plot. Defaults to 8 in.
             height: Height of the plot. Defaults to 6 in.
         """
-        self.get_plot(width, height).savefig(filename, format=image_format)
+        self.get_plot(width, height).savefig(filename)

@@ -1,6 +1,5 @@
 """This module contains some script utils that are used in the chemenv package."""
 
-
 from __future__ import annotations
 
 import re
@@ -30,10 +29,8 @@ from pymatgen.io.cif import CifParser
 try:
     from pymatgen.vis.structure_vtk import StructureVis
 
-    no_vis = False
 except ImportError:
-    StructureVis = None  # type: ignore
-    no_vis = True
+    StructureVis = None  # type: ignore[misc]
 
 __author__ = "David Waroquiers"
 __copyright__ = "Copyright 2012, The Materials Project"
@@ -67,18 +64,19 @@ def draw_cg(
     """
     Draw cg.
 
-    :param vis:
-    :param site:
-    :param neighbors:
-    :param cg:
-    :param perm:
-    :param perfect2local_map:
-    :param show_perfect:
-    :param csm_info:
-    :param symmetry_measure_type:
-    :param perfect_radius:
-    :param show_distorted:
-    :param faces_color_override:
+    Args:
+        site:
+        vis:
+        neighbors:
+        cg:
+        perm:
+        perfect2local_map:
+        show_perfect:
+        csm_info:
+        symmetry_measure_type:
+        perfect_radius:
+        show_distorted:
+        faces_color_override:
     """
     if show_perfect:
         if csm_info is None:
@@ -157,14 +155,15 @@ def draw_cg(
 def visualize(cg, zoom=None, vis=None, factor=1.0, view_index=True, faces_color_override=None):
     """
     Visualizing a coordination geometry
-    :param cg:
-    :param zoom:
-    :param vis:
-    :param factor:
-    :param view_index:
-    :param faces_color_override:
+    Args:
+        cg:
+        zoom:
+        vis:
+        factor:
+        view_index:
+        faces_color_override:
     """
-    if vis is None:
+    if vis is None and StructureVis is not None:
         vis = StructureVis(show_polyhedron=False, show_unit_cell=False)
     species = ["O"] * (cg.coordination_number + 1)
     species[0] = "Cu"
@@ -195,7 +194,8 @@ def compute_environments(chemenv_configuration):
     """
     Compute the environments.
 
-    :param chemenv_configuration:
+    Args:
+        chemenv_configuration:
     """
     string_sources = {
         "cif": {"string": "a Cif file", "regexp": r".*\.cif$"},
@@ -240,7 +240,7 @@ def compute_environments(chemenv_configuration):
             if not found:
                 input_source = input("Enter path to CIF file : ")
             parser = CifParser(input_source)
-            structure = parser.get_structures()[0]
+            structure = parser.parse_structures(primitive=True)[0]
         elif source_type == "mp":
             if not found:
                 input_source = input('Enter materials project id (e.g. "mp-1902") : ')
@@ -249,7 +249,7 @@ def compute_environments(chemenv_configuration):
             with MPRester() as mpr:
                 structure = mpr.get_structure_by_material_id(input_source)
         lgf.setup_structure(structure)
-        print(f"Computing environments for {structure.composition.reduced_formula} ... ")
+        print(f"Computing environments for {structure.reduced_formula} ... ")
         se = lgf.compute_structure_environments(maximum_distance_factor=max_dist_factor)
         print("Computing environments finished")
         while True:
@@ -322,7 +322,7 @@ def compute_environments(chemenv_configuration):
                     except IndexError:
                         print("This site is out of the site range")
 
-            if no_vis:
+            if StructureVis is None:
                 test = input('Go to next structure ? ("y" to do so)')
                 if test == "y":
                     break
@@ -345,7 +345,7 @@ def compute_environments(chemenv_configuration):
                             print("Not a valid multiplicity")
                 else:
                     deltas = [np.zeros(3, float)]
-                if first_time:
+                if first_time and StructureVis is not None:
                     vis = StructureVis(show_polyhedron=False, show_unit_cell=True)
                     vis.show_help = False
                     first_time = False

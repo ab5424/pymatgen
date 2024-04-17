@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from glob import glob
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,8 +18,12 @@ from monty.json import MSONable, jsanitize
 from scipy.interpolate import CubicSpline
 
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from pymatgen.io.vasp import Outcar, Poscar
+from pymatgen.core import Structure
+from pymatgen.io.vasp import Outcar
 from pymatgen.util.plotting import pretty_plot
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 
 class NEBAnalysis(MSONable):
@@ -81,7 +86,7 @@ class NEBAnalysis(MSONable):
             self.spline = CubicSpline(x=self.r, y=relative_energies, bc_type=((1, 0.0), (1, 0.0)))
 
     @classmethod
-    def from_outcars(cls, outcars, structures, **kwargs):
+    def from_outcars(cls, outcars, structures, **kwargs) -> Self:
         """
         Initializes an NEBAnalysis from Outcar and Structure objects. Use
         the static constructors, e.g., from_dir instead if you
@@ -104,26 +109,26 @@ class NEBAnalysis(MSONable):
         # which serves as the reaction coordinate. Note that these are
         # calculated from the final relaxed structures as the coordinates may
         # have changed from the initial interpolation.
-        r = [0]
+        rms_dist = [0]
         prev = structures[0]
         for st in structures[1:]:
             dists = np.array([s2.distance(s1) for s1, s2 in zip(prev, st)])
-            r.append(np.sqrt(np.sum(dists**2)))
+            rms_dist.append(np.sqrt(np.sum(dists**2)))
             prev = st
-        r = np.cumsum(r)
+        rms_dist = np.cumsum(rms_dist)
 
         energies = []
         forces = []
-        for i, o in enumerate(outcars):
-            o.read_neb()
-            energies.append(o.data["energy"])
-            if i in [0, len(outcars) - 1]:
+        for idx, outcar in enumerate(outcars):
+            outcar.read_neb()
+            energies.append(outcar.data["energy"])
+            if idx in [0, len(outcars) - 1]:
                 forces.append(0)
             else:
-                forces.append(o.data["tangent_force"])
+                forces.append(outcar.data["tangent_force"])
         forces = np.array(forces)
-        r = np.array(r)
-        return cls(r=r, energies=energies, forces=forces, structures=structures, **kwargs)
+        rms_dist = np.array(rms_dist)
+        return cls(r=rms_dist, energies=energies, forces=forces, structures=structures, **kwargs)
 
     def get_extrema(self, normalize_rxn_coordinate=True):
         """
@@ -135,8 +140,7 @@ class NEBAnalysis(MSONable):
                 reaction coordinate to between 0 and 1. Defaults to True.
 
         Returns:
-            (min_extrema, max_extrema), where the extrema are given as
-            [(x1, y1), (x2, y2), ...].
+            tuple[min_extrema, max_extrema]: where the extrema are given as [(x1, y1), (x2, y2), ...].
         """
         x = np.arange(0, np.max(self.r), 0.01)
         y = self.spline(x) * 1000
@@ -152,51 +156,43 @@ class NEBAnalysis(MSONable):
         return min_extrema, max_extrema
 
     def get_plot(self, normalize_rxn_coordinate: bool = True, label_barrier: bool = True) -> plt.Axes:
-        """
-        Returns the NEB plot. Uses Henkelman's approach of spline fitting
+        """Get an NEB plot. Uses Henkelman's approach of spline fitting
         each section of the reaction path based on tangent force and energies.
 
         Args:
             normalize_rxn_coordinate (bool): Whether to normalize the
                 reaction coordinate to between 0 and 1. Defaults to True.
-            label_barrier (bool): Whether to label the maximum barrier.
+            label_barrier (bool): Whether to label the maximum barrier. Defaults to True.
 
         Returns:
             plt.Axes: matplotlib axes object.
         """
         ax = pretty_plot(12, 8)
-        scale = 1 if not normalize_rxn_coordinate else 1 / self.r[-1]
-        x = np.arange(0, np.max(self.r), 0.01)
-        y = self.spline(x) * 1000
+        scale = 1 / self.r[-1] if normalize_rxn_coordinate else 1
+        xs = np.arange(0, np.max(self.r), 0.01)
+        ys = self.spline(xs) * 1000
         relative_energies = self.energies - self.energies[0]
-        ax.plot(
-            self.r * scale,
-            relative_energies * 1000,
-            "ro",
-            x * scale,
-            y,
-            "k-",
-            linewidth=2,
-            markersize=10,
-        )
-        ax.set_xlabel("Reaction coordinate")
+        ax.plot(self.r * scale, relative_energies * 1000, "ro", xs * scale, ys, "k-", linewidth=2, markersize=10)
+
+        ax.set_xlabel("Reaction Coordinate")
         ax.set_ylabel("Energy (meV)")
-        ax.set_ylim((np.min(y) - 10, np.max(y) * 1.02 + 20))
+        ax.set_ylim((np.min(ys) - 10, np.max(ys) * 1.02 + 20))
         if label_barrier:
-            data = zip(x * scale, y)
+            data = zip(xs * scale, ys)
             barrier = max(data, key=lambda d: d[1])
-            ax.plot([0, barrier[0]], [barrier[1], barrier[1]], "k--")
+            ax.plot([0, barrier[0]], [barrier[1], barrier[1]], "k--", linewidth=0.5)
             ax.annotate(
-                f"{np.max(y) - np.min(y):.0f} meV",
+                f"{np.max(ys) - np.min(ys):.0f} meV",
                 xy=(barrier[0] / 2, barrier[1] * 1.02),
                 xytext=(barrier[0] / 2, barrier[1] * 1.02),
                 horizontalalignment="center",
+                fontsize=18,
             )
         plt.tight_layout()
         return ax
 
     @classmethod
-    def from_dir(cls, root_dir, relaxation_dirs=None, **kwargs):
+    def from_dir(cls, root_dir, relaxation_dirs=None, **kwargs) -> Self:
         """
         Initializes a NEBAnalysis object from a directory of a NEB run.
         Note that OUTCARs must be present in all image directories. For the
@@ -237,8 +233,8 @@ class NEBAnalysis(MSONable):
         for digit in os.listdir(root_dir):
             pth = os.path.join(root_dir, digit)
             if os.path.isdir(pth) and digit.isdigit():
-                i = int(digit)
-                neb_dirs.append((i, pth))
+                idx = int(digit)
+                neb_dirs.append((idx, pth))
         neb_dirs = sorted(neb_dirs, key=lambda d: d[0])
         outcars = []
         structures = []
@@ -252,25 +248,25 @@ class NEBAnalysis(MSONable):
         terminal_dirs.append([os.path.join(root_dir, d) for d in ["start", "end"]])
         terminal_dirs.append([os.path.join(root_dir, d) for d in ["initial", "final"]])
 
-        for i, d in neb_dirs:
-            outcar = glob(f"{d}/OUTCAR*")
-            contcar = glob(f"{d}/CONTCAR*")
-            poscar = glob(f"{d}/POSCAR*")
-            terminal = i in [0, neb_dirs[-1][0]]
+        for idx, neb_dir in neb_dirs:
+            outcar = glob(f"{neb_dir}/OUTCAR*")
+            contcar = glob(f"{neb_dir}/CONTCAR*")
+            poscar = glob(f"{neb_dir}/POSCAR*")
+            terminal = idx in [0, neb_dirs[-1][0]]
             if terminal:
                 for ds in terminal_dirs:
-                    od = ds[0] if i == 0 else ds[1]
+                    od = ds[0] if idx == 0 else ds[1]
                     outcar = glob(f"{od}/OUTCAR*")
                     if outcar:
                         outcar = sorted(outcar)
                         outcars.append(Outcar(outcar[-1]))
                         break
                 else:
-                    raise ValueError(f"OUTCAR cannot be found for terminal point {d}")
-                structures.append(Poscar.from_file(poscar[0]).structure)
+                    raise ValueError(f"OUTCAR cannot be found for terminal point {neb_dir}")
+                structures.append(Structure.from_file(poscar[0]))
             else:
                 outcars.append(Outcar(outcar[0]))
-                structures.append(Poscar.from_file(contcar[0]).structure)
+                structures.append(Structure.from_file(contcar[0]))
         return NEBAnalysis.from_outcars(outcars, structures, **kwargs)
 
     def as_dict(self):
@@ -304,7 +300,9 @@ def combine_neb_plots(neb_analyses, arranged_neb_analyses=False, reverse_plot=Fa
     Note that the barrier labeled in y-axis in the combined plot might be
     different from that in the individual plot due to the reference energy used.
     reverse_plot: reverse the plot or percolation direction.
-    return: a NEBAnalysis object
+
+    Returns:
+        a NEBAnalysis object
     """
     x = StructureMatcher()
     for neb_index, neb in enumerate(neb_analyses):

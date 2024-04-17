@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from monty.serialization import loadfn
 
-from pymatgen.core.periodic_table import Element, Species, get_el_sp
+from pymatgen.core import Element, Species, get_el_sp
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 if TYPE_CHECKING:
@@ -36,8 +36,7 @@ PRIOR_PROB = {Species.from_str(sp): data for sp, data in all_data["occurrence"].
 
 
 def calculate_bv_sum(site, nn_list, scale_factor=1.0):
-    """
-    Calculates the BV sum of a site.
+    """Calculates the BV sum of a site.
 
     Args:
         site (PeriodicSite): The central site to calculate the bond valence
@@ -63,8 +62,7 @@ def calculate_bv_sum(site, nn_list, scale_factor=1.0):
 
 
 def calculate_bv_sum_unordered(site, nn_list, scale_factor=1):
-    """
-    Calculates the BV sum of a site for unordered structures.
+    """Calculates the BV sum of a site for unordered structures.
 
     Args:
         site (PeriodicSite): The central site to calculate the bond valence
@@ -82,7 +80,7 @@ def calculate_bv_sum_unordered(site, nn_list, scale_factor=1):
     # site "site" is obtained as :
     # \sum_{nn} \sum_j^N \sum_k^{N_{nn}} f_{site}_j f_{nn_i}_k vij_full
     # where vij_full is the valence bond of the fully occupied bond
-    bvsum = 0
+    bv_sum = 0
     for specie1, occu1 in site.species.items():
         el1 = Element(specie1.symbol)
         for nn in nn_list:
@@ -95,8 +93,8 @@ def calculate_bv_sum_unordered(site, nn_list, scale_factor=1):
                     c2 = BV_PARAMS[el2]["c"]
                     R = r1 + r2 - r1 * r2 * (sqrt(c1) - sqrt(c2)) ** 2 / (c1 * r1 + c2 * r2)
                     vij = exp((R - nn.nn_distance * scale_factor) / 0.31)
-                    bvsum += occu1 * occu2 * vij * (1 if el1.X < el2.X else -1)
-    return bvsum
+                    bv_sum += occu1 * occu2 * vij * (1 if el1.X < el2.X else -1)
+    return bv_sum
 
 
 class BVAnalyzer:
@@ -117,13 +115,13 @@ class BVAnalyzer:
     is selected.
     """
 
-    CHARGE_NEUTRALITY_TOLERANCE = 0.00001
+    CHARGE_NEUTRALITY_TOLERANCE = 0.000_01
 
     def __init__(
         self,
         symm_tol=0.1,
         max_radius=4,
-        max_permutations=100000,
+        max_permutations=100_000,
         distance_scale_factor=1.015,
         charge_neutrality_tolerance=CHARGE_NEUTRALITY_TOLERANCE,
         forbidden_species=None,
@@ -181,7 +179,7 @@ class BVAnalyzer:
         try:
             prob = {k: v / sum(prob.values()) for k, v in prob.items()}
         except ZeroDivisionError:
-            prob = {key: 0 for key in prob}
+            prob = dict.fromkeys(prob, 0)
         return prob
 
     def _calc_site_probabilities_unordered(self, site, nn):
@@ -202,7 +200,7 @@ class BVAnalyzer:
             try:
                 prob[el] = {k: v / sum(prob[el].values()) for k, v in prob[el].items()}
             except ZeroDivisionError:
-                prob[el] = {key: 0 for key in prob[el]}
+                prob[el] = dict.fromkeys(prob[el], 0)
         return prob
 
     def get_valences(self, structure: Structure):
@@ -286,7 +284,7 @@ class BVAnalyzer:
                 max_diff = max(max(v) - min(v) for v in el_oxi.values())
                 if max_diff > 1:
                     return
-                score = functools.reduce(operator.mul, [all_prob[i][v] for i, v in enumerate(v_set)])
+                score = functools.reduce(operator.mul, [all_prob[idx][val] for idx, val in enumerate(v_set)])
                 if score > self._best_score:
                     self._best_vset = v_set
                     self._best_score = score
@@ -331,7 +329,7 @@ class BVAnalyzer:
                 for _ in valences[idx]:
                     tmp.append(n_site)
                     attrib.append(idx)
-            new_nsites = np.array(tmp)
+            new_n_sites = np.array(tmp)
             fractions = []
             elements = []
             for sites in equi_sites:
@@ -340,8 +338,8 @@ class BVAnalyzer:
                     fractions.append(occu)
             fractions = np.array(fractions, float)  # type: ignore[assignment]
             new_valences = [val for vals in valences for val in vals]
-            valence_min = np.array([min(i) for i in new_valences], float)
-            valence_max = np.array([max(i) for i in new_valences], float)
+            valence_min = np.array([min(val) for val in new_valences], float)
+            valence_max = np.array([max(val) for val in new_valences], float)
 
             self._n = 0
             self._best_score = 0
@@ -377,13 +375,13 @@ class BVAnalyzer:
                 i = len(assigned)
                 highest = valence_max.copy()
                 highest[:i] = assigned
-                highest *= new_nsites
+                highest *= new_n_sites
                 highest *= fractions
                 highest = np.sum(highest)
 
                 lowest = valence_min.copy()
                 lowest[:i] = assigned
-                lowest *= new_nsites
+                lowest *= new_n_sites
                 lowest *= fractions
                 lowest = np.sum(lowest)
 

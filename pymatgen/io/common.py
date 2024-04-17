@@ -6,6 +6,7 @@ import itertools
 import json
 import warnings
 from copy import deepcopy
+from typing import TYPE_CHECKING
 
 import numpy as np
 from monty.io import zopen
@@ -15,6 +16,11 @@ from scipy.interpolate import RegularGridInterpolator
 from pymatgen.core import Element, Site, Structure
 from pymatgen.core.units import ang_to_bohr, bohr_to_angstrom
 from pymatgen.electronic_structure.core import Spin
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from typing_extensions import Self
 
 
 class VolumetricData(MSONable):
@@ -33,21 +39,26 @@ class VolumetricData(MSONable):
         ngridpts (int): Total number of grid points in volumetric data.
     """
 
-    def __init__(self, structure: Structure, data, distance_matrix=None, data_aug=None):
+    def __init__(
+        self,
+        structure: Structure,
+        data: dict[str, np.ndarray],
+        distance_matrix: np.ndarray | None = None,
+        data_aug: np.ndarray | None = None,
+    ) -> None:
         """
         Typically, this constructor is not used directly and the static
         from_file constructor is used. This constructor is designed to allow
         summation and other operations between VolumetricData objects.
 
         Args:
-            structure: Structure associated with the volumetric data
-            data: Actual volumetric data. If the data is provided as in list format,
-                it will be converted into an np.array automatically
-            data_aug: Any extra information associated with volumetric data
-                (typically augmentation charges)
-            distance_matrix: A pre-computed distance matrix if available.
+            structure (Structure): associated with the volumetric data
+            data (dict[str, np.array]): Actual volumetric data.
+            distance_matrix (np.array): A pre-computed distance matrix if available.
                 Useful so pass distance_matrices between sums,
                 short-circuiting an otherwise expensive operation.
+            data_aug (np.array): Any extra information associated with volumetric data
+                (typically augmentation charges)
         """
         self.structure = structure
         self.is_spin_polarized = len(data) >= 2
@@ -59,7 +70,7 @@ class VolumetricData(MSONable):
         self.ngridpts = self.dim[0] * self.dim[1] * self.dim[2]
         # lazy init the spin data since this is not always needed.
         self._spin_data: dict[Spin, float] = {}
-        self._distance_matrix = distance_matrix if distance_matrix else {}
+        self._distance_matrix = distance_matrix or {}
         self.xpoints = np.linspace(0.0, 1.0, num=self.dim[0])
         self.ypoints = np.linspace(0.0, 1.0, num=self.dim[1])
         self.zpoints = np.linspace(0.0, 1.0, num=self.dim[2])
@@ -279,44 +290,45 @@ class VolumetricData(MSONable):
         """
         import h5py
 
-        with h5py.File(filename, "w") as f:
-            ds = f.create_dataset("lattice", (3, 3), dtype="float")
+        with h5py.File(filename, mode="w") as file:
+            ds = file.create_dataset("lattice", (3, 3), dtype="float")
             ds[...] = self.structure.lattice.matrix
-            ds = f.create_dataset("Z", (len(self.structure.species),), dtype="i")
+            ds = file.create_dataset("Z", (len(self.structure.species),), dtype="i")
             ds[...] = np.array([sp.Z for sp in self.structure.species])
-            ds = f.create_dataset("fcoords", self.structure.frac_coords.shape, dtype="float")
+            ds = file.create_dataset("fcoords", self.structure.frac_coords.shape, dtype="float")
             ds[...] = self.structure.frac_coords
             dt = h5py.special_dtype(vlen=str)
-            ds = f.create_dataset("species", (len(self.structure.species),), dtype=dt)
+            ds = file.create_dataset("species", (len(self.structure.species),), dtype=dt)
             ds[...] = [str(sp) for sp in self.structure.species]
-            grp = f.create_group("vdata")
+            grp = file.create_group("vdata")
             for k in self.data:
                 ds = grp.create_dataset(k, self.data[k].shape, dtype="float")
                 ds[...] = self.data[k]
-            f.attrs["name"] = self.name
-            f.attrs["structure_json"] = json.dumps(self.structure.as_dict())
+            file.attrs["name"] = self.name
+            file.attrs["structure_json"] = json.dumps(self.structure.as_dict())
 
     @classmethod
-    def from_hdf5(cls, filename, **kwargs):
+    def from_hdf5(cls, filename: str, **kwargs) -> Self:
         """
         Reads VolumetricData from HDF5 file.
 
-        :param filename: Filename
+        Args:
+            filename: Filename
 
         Returns:
             VolumetricData
         """
         import h5py
 
-        with h5py.File(filename, "r") as f:
-            data = {k: np.array(v) for k, v in f["vdata"].items()}
+        with h5py.File(filename, mode="r") as file:
+            data = {k: np.array(v) for k, v in file["vdata"].items()}
             data_aug = None
-            if "vdata_aug" in f:
-                data_aug = {k: np.array(v) for k, v in f["vdata_aug"].items()}
-            structure = Structure.from_dict(json.loads(f.attrs["structure_json"]))
+            if "vdata_aug" in file:
+                data_aug = {k: np.array(v) for k, v in file["vdata_aug"].items()}
+            structure = Structure.from_dict(json.loads(file.attrs["structure_json"]))
             return cls(structure, data=data, data_aug=data_aug, **kwargs)
 
-    def to_cube(self, filename, comment=None):
+    def to_cube(self, filename, comment: str = ""):
         """
         Write the total volumetric data to a cube file format, which consists of two comment lines,
         a header section defining the structure IN BOHR, and the data.
@@ -324,11 +336,10 @@ class VolumetricData(MSONable):
         Args:
             filename (str): Name of the cube file to be written.
             comment (str): If provided, this will be added to the second comment line
-
         """
-        with zopen(filename, "wt") as file:
+        with zopen(filename, mode="wt") as file:
             file.write(f"# Cube file for {self.structure.formula} generated by Pymatgen\n")
-            file.write(f"# {comment if comment else ''}\n")
+            file.write(f"# {comment}\n")
             file.write(f"\t {len(self.structure)} 0.000000 0.000000 0.000000\n")
 
             for idx in range(3):
@@ -345,20 +356,20 @@ class VolumetricData(MSONable):
                     f"{ang_to_bohr * site.coords[2]} \n"
                 )
 
-            for idx, dat in enumerate(self.data["total"].flatten()):
+            for idx, dat in enumerate(self.data["total"].flatten(), start=1):
                 file.write(f"{' ' if dat > 0 else ''}{dat:.6e} ")
-                if (idx + 1) % 6 == 0:
+                if idx % 6 == 0:
                     file.write("\n")
 
     @classmethod
-    def from_cube(cls, filename):
+    def from_cube(cls, filename: str | Path) -> Self:
         """
         Initialize the cube object and store the data as data.
 
         Args:
             filename (str): of the cube to read
         """
-        file = zopen(filename, "rt")
+        file = zopen(filename, mode="rt")
 
         # skip header lines
         file.readline()
@@ -366,7 +377,7 @@ class VolumetricData(MSONable):
 
         # number of atoms followed by the position of the origin of the volumetric data
         line = file.readline().split()
-        natoms = int(line[0])
+        n_atoms = int(line[0])
 
         # The number of voxels along each axis (x, y, z) followed by the axis vector.
         line = file.readline().split()
@@ -385,7 +396,7 @@ class VolumetricData(MSONable):
         # the first is the atom number, second is charge,
         # the last three are the x,y,z coordinates of the atom center.
         sites = []
-        for _ in range(natoms):
+        for _ in range(n_atoms):
             line = file.readline().split()
             sites.append(Site(line[0], np.multiply(bohr_to_angstrom, list(map(float, line[2:])))))
 

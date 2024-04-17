@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
     from numpy.typing import ArrayLike
 
+    from pymatgen.util.typing import PbcLike
+
 
 # array size threshold for looping instead of broadcasting
 LOOP_THRESHOLD = 1e6
@@ -100,7 +102,7 @@ def coord_list_mapping(subset: ArrayLike, superset: ArrayLike, atol: float = 1e-
     return inds
 
 
-def coord_list_mapping_pbc(subset, superset, atol: float = 1e-8, pbc: tuple[bool, bool, bool] = (True, True, True)):
+def coord_list_mapping_pbc(subset, superset, atol: float = 1e-8, pbc: PbcLike = (True, True, True)):
     """Gives the index mapping from a subset to a superset.
     Superset cannot contain duplicate matching rows.
 
@@ -131,16 +133,16 @@ def get_linear_interpolated_value(x_values: ArrayLike, y_values: ArrayLike, x: f
     Returns:
         Value at x.
     """
-    a = np.array(sorted(zip(x_values, y_values), key=lambda d: d[0]))
+    arr = np.array(sorted(zip(x_values, y_values), key=lambda d: d[0]))
 
-    ind = np.where(a[:, 0] >= x)[0]
+    indices = np.where(arr[:, 0] >= x)[0]
 
-    if len(ind) == 0 or ind[0] == 0:
-        raise ValueError("x is out of range of provided x_values")
+    if len(indices) == 0 or indices[0] == 0:
+        raise ValueError(f"{x=} is out of range of provided x_values ({min(x_values)}, {max(x_values)})")
 
-    i = ind[0]
-    x1, x2 = a[i - 1][0], a[i][0]
-    y1, y2 = a[i - 1][1], a[i][1]
+    idx = indices[0]
+    x1, x2 = arr[idx - 1][0], arr[idx][0]
+    y1, y2 = arr[idx - 1][1], arr[idx][1]
 
     return y1 + (y2 - y1) / (x2 - x1) * (x - x1)
 
@@ -162,7 +164,7 @@ def all_distances(coords1: ArrayLike, coords2: ArrayLike) -> np.ndarray:
     return np.sum(z, axis=-1) ** 0.5
 
 
-def pbc_diff(fcoords1: ArrayLike, fcoords2: ArrayLike, pbc: tuple[bool, bool, bool] = (True, True, True)):
+def pbc_diff(fcoords1: ArrayLike, fcoords2: ArrayLike, pbc: PbcLike = (True, True, True)):
     """Returns the 'fractional distance' between two coordinates taking into
     account periodic boundary conditions.
 
@@ -206,9 +208,7 @@ def pbc_shortest_vectors(lattice, fcoords1, fcoords2, mask=None, return_d2: bool
     return coord_cython.pbc_shortest_vectors(lattice, fcoords1, fcoords2, mask, return_d2)
 
 
-def find_in_coord_list_pbc(
-    fcoord_list, fcoord, atol: float = 1e-8, pbc: tuple[bool, bool, bool] = (True, True, True)
-) -> np.ndarray:
+def find_in_coord_list_pbc(fcoord_list, fcoord, atol: float = 1e-8, pbc: PbcLike = (True, True, True)) -> np.ndarray:
     """Get the indices of all points in a fractional coord list that are
     equal to a fractional coord (with a tolerance), taking into account
     periodic boundary conditions.
@@ -225,15 +225,13 @@ def find_in_coord_list_pbc(
     """
     if len(fcoord_list) == 0:
         return []
-    fcoords = np.tile(fcoord, (len(fcoord_list), 1))
-    fdist = fcoord_list - fcoords
-    fdist[:, pbc] -= np.round(fdist)[:, pbc]
-    return np.where(np.all(np.abs(fdist) < atol, axis=1))[0]
+    frac_coords = np.tile(fcoord, (len(fcoord_list), 1))
+    frac_dist = fcoord_list - frac_coords
+    frac_dist[:, pbc] -= np.round(frac_dist)[:, pbc]
+    return np.where(np.all(np.abs(frac_dist) < atol, axis=1))[0]
 
 
-def in_coord_list_pbc(
-    fcoord_list, fcoord, atol: float = 1e-8, pbc: tuple[bool, bool, bool] = (True, True, True)
-) -> bool:
+def in_coord_list_pbc(fcoord_list, fcoord, atol: float = 1e-8, pbc: PbcLike = (True, True, True)) -> bool:
     """Tests if a particular fractional coord is within a fractional coord_list.
 
     Args:
@@ -249,9 +247,7 @@ def in_coord_list_pbc(
     return len(find_in_coord_list_pbc(fcoord_list, fcoord, atol=atol, pbc=pbc)) > 0
 
 
-def is_coord_subset_pbc(
-    subset, superset, atol: float = 1e-8, mask=None, pbc: tuple[bool, bool, bool] = (True, True, True)
-) -> bool:
+def is_coord_subset_pbc(subset, superset, atol: float = 1e-8, mask=None, pbc: PbcLike = (True, True, True)) -> bool:
     """Tests if all fractional coords in subset are contained in superset.
 
     Args:
@@ -269,9 +265,9 @@ def is_coord_subset_pbc(
     """
     c1 = np.array(subset, dtype=np.float64)
     c2 = np.array(superset, dtype=np.float64)
-    m = np.array(mask, dtype=int) if mask is not None else np.zeros((len(subset), len(superset)), dtype=int)
+    mask_arr = np.array(mask, dtype=int) if mask is not None else np.zeros((len(subset), len(superset)), dtype=int)
     atol = np.zeros(3, dtype=np.float64) + atol
-    return coord_cython.is_coord_subset_pbc(c1, c2, atol, m, pbc)
+    return coord_cython.is_coord_subset_pbc(c1, c2, atol, mask_arr, pbc)
 
 
 def lattice_points_in_supercell(supercell_matrix):
@@ -348,7 +344,7 @@ def get_angle(v1: ArrayLike, v2: ArrayLike, units: Literal["degrees", "radians"]
 
 
 class Simplex(MSONable):
-    """A generalized simplex object. See http://en.wikipedia.org/wiki/Simplex.
+    """A generalized simplex object. See http://wikipedia.org/wiki/Simplex.
 
     Attributes:
         space_dim (int): Dimension of the space. Usually, this is 1 more than the simplex_dim.
@@ -378,7 +374,7 @@ class Simplex(MSONable):
     def bary_coords(self, point):
         """
         Args:
-            point (): Point coordinates.
+            point (ArrayLike): Point coordinates.
 
         Returns:
             Barycentric coordinations.
@@ -391,17 +387,17 @@ class Simplex(MSONable):
     def point_from_bary_coords(self, bary_coords: ArrayLike):
         """
         Args:
-            bary_coords (): Barycentric coordinates.
+            bary_coords (ArrayLike): Barycentric coordinates (d+1, d).
 
         Returns:
-            Point coordinates
+            np.array: Point in the simplex.
         """
         try:
             return np.dot(bary_coords, self._aug[:, :-1])
         except AttributeError as exc:
             raise ValueError("Simplex is not full-dimensional") from exc
 
-    def in_simplex(self, point, tolerance=1e-8):
+    def in_simplex(self, point: Sequence[float], tolerance: float = 1e-8) -> bool:
         """Checks if a point is in the simplex using the standard barycentric
         coordinate system algorithm.
 
@@ -409,11 +405,11 @@ class Simplex(MSONable):
         simplex from this origin by subtracting all other vertices from the
         origin. We then project the point into this coordinate system and
         determine the linear decomposition coefficients in this coordinate
-        system. If the coeffs satisfy that all coeffs >= 0, the composition
+        system. If the coeffs satisfy all(coeffs >= 0), the composition
         is in the facet.
 
         Args:
-            point ([float]): Point to test
+            point (list[float]): Point to test
             tolerance (float): Tolerance to test if point is in simplex.
         """
         return (self.bary_coords(point) >= -tolerance).all()

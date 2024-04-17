@@ -4,20 +4,23 @@ This module defines classes for parsing the FEFF output files.
 Currently supports the xmu.dat, ldos.dat output files are for non-spin case.
 """
 
-
 from __future__ import annotations
 
 import re
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 import numpy as np
 from monty.io import zopen
 from monty.json import MSONable
 
-from pymatgen.core.periodic_table import Element
+from pymatgen.core import Element
 from pymatgen.electronic_structure.core import Orbital, Spin
 from pymatgen.electronic_structure.dos import CompleteDos, Dos
 from pymatgen.io.feff import Header, Potential, Tags
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 __author__ = "Alan Dozier, Kiran Mathew, Chen Zheng"
 __credits__ = "Anubhav Jain, Shyue Ping Ong"
@@ -42,8 +45,8 @@ class LDos(MSONable):
         self.complete_dos = complete_dos
         self.charge_transfer = charge_transfer
 
-    @staticmethod
-    def from_file(feff_inp_file="feff.inp", ldos_file="ldos"):
+    @classmethod
+    def from_file(cls, feff_inp_file: str = "feff.inp", ldos_file: str = "ldos") -> Self:
         """
         Creates LDos object from raw Feff ldos files by
         by assuming they are numbered consecutively, i.e. ldos01.dat
@@ -67,7 +70,7 @@ class LDos(MSONable):
             dos_index = 1
             begin = 0
 
-            with zopen(pot_inp, "r") as potfile:
+            with zopen(pot_inp, mode="r") as potfile:
                 for line in potfile:
                     if len(pot_readend.findall(line)) > 0:
                         break
@@ -89,10 +92,10 @@ class LDos(MSONable):
                         begin = 1
         else:
             pot_string = Potential.pot_string_from_file(feff_inp_file)
-            dicts = Potential.pot_dict_from_string(pot_string)
+            dicts = Potential.pot_dict_from_str(pot_string)
             pot_dict = dicts[0]
 
-        with zopen(ldos_file + "00.dat", "r") as file:
+        with zopen(ldos_file + "00.dat", mode="r") as file:
             lines = file.readlines()
         efermi = float(lines[0].split()[4])
 
@@ -108,7 +111,7 @@ class LDos(MSONable):
         for idx in range(len(ldos[1])):
             dos_energies.append(ldos[1][idx][0])
 
-        all_pdos = []
+        all_pdos: list[dict] = []
         vorb = {"s": Orbital.s, "p": Orbital.py, "d": Orbital.dxy, "f": Orbital.f0}
         forb = {"s": 0, "p": 1, "d": 2, "f": 3}
 
@@ -135,16 +138,16 @@ class LDos(MSONable):
         t_dos = [0] * d_length
         for idx in range(n_sites):
             pot_index = pot_dict[structure.species[idx].symbol]
-            for v in forb.values():
-                density = [ldos[pot_index][j][v + 1] for j in range(d_length)]
+            for forb_val in forb.values():
+                density = [ldos[pot_index][j][forb_val + 1] for j in range(d_length)]
                 for j in range(d_length):
                     t_dos[j] = t_dos[j] + density[j]
-        t_dos = {Spin.up: t_dos}
+        _t_dos: dict = {Spin.up: t_dos}
 
-        dos = Dos(efermi, dos_energies, t_dos)
+        dos = Dos(efermi, dos_energies, _t_dos)
         complete_dos = CompleteDos(structure, dos, pdoss)
         charge_transfer = LDos.charge_transfer_from_file(feff_inp_file, ldos_file)
-        return LDos(complete_dos, charge_transfer)
+        return cls(complete_dos, charge_transfer)
 
     @staticmethod
     def charge_transfer_from_file(feff_inp_file, ldos_file):
@@ -171,7 +174,7 @@ class LDos(MSONable):
             pot_inp = re.sub(r"feff.inp", r"pot.inp", feff_inp_file)
             pot_readstart = re.compile(".*iz.*lmaxsc.*xnatph.*xion.*folp.*")
             pot_readend = re.compile(".*ExternalPot.*switch.*")
-            with zopen(pot_inp, "r") as potfile:
+            with zopen(pot_inp, mode="r") as potfile:
                 for line in potfile:
                     if len(pot_readend.findall(line)) > 0:
                         break
@@ -197,12 +200,12 @@ class LDos(MSONable):
                         begin = 1
         else:
             pot_string = Potential.pot_string_from_file(feff_inp_file)
-            dicts = Potential.pot_dict_from_string(pot_string)
+            dicts = Potential.pot_dict_from_str(pot_string)
             pot_dict = dicts[1]
 
         for idx in range(len(dicts[0]) + 1):
             if len(str(idx)) == 1:
-                with zopen(f"{ldos_file}0{idx}.dat", "rt") as file:
+                with zopen(f"{ldos_file}0{idx}.dat", mode="rt") as file:
                     lines = file.readlines()
                     s = float(lines[3].split()[2])
                     p = float(lines[4].split()[2])
@@ -211,7 +214,7 @@ class LDos(MSONable):
                     tot = float(lines[1].split()[4])
                     cht[str(idx)] = {pot_dict[idx]: {"s": s, "p": p, "d": d, "f": f1, "tot": tot}}
             else:
-                with zopen(f"{ldos_file}{idx}.dat", "rt") as file:
+                with zopen(f"{ldos_file}{idx}.dat", mode="rt") as file:
                     lines = file.readlines()
                     s = float(lines[3].split()[2])
                     p = float(lines[4].split()[2])
@@ -222,7 +225,7 @@ class LDos(MSONable):
 
         return cht
 
-    def charge_transfer_to_string(self):
+    def charge_transfer_to_str(self):
         """Returns charge transfer as string."""
         ch = self.charge_transfer
         chts = ["\nCharge Transfer\n\nabsorbing atom"]
@@ -287,8 +290,8 @@ class Xmu(MSONable):
         self.absorbing_atom = absorbing_atom
         self.data = np.array(data)
 
-    @staticmethod
-    def from_file(xmu_dat_file="xmu.dat", feff_inp_file="feff.inp"):
+    @classmethod
+    def from_file(cls, xmu_dat_file: str = "xmu.dat", feff_inp_file: str = "feff.inp") -> Self:
         """
         Get Xmu from file.
 
@@ -307,7 +310,7 @@ class Xmu(MSONable):
         # site index (Note: in feff it starts from 1)
         # else case is species symbol
         absorbing_atom = parameters["TARGET"] if "RECIPROCAL" in parameters else pots.splitlines()[3].split()[2]
-        return Xmu(header, parameters, absorbing_atom, data)
+        return cls(header, parameters, absorbing_atom, data)
 
     @property
     def energies(self):
@@ -412,8 +415,8 @@ class Eels(MSONable):
         """Returns: Fine structure of EELS."""
         return self.data[:, 3]
 
-    @staticmethod
-    def from_file(eels_dat_file="eels.dat"):
+    @classmethod
+    def from_file(cls, eels_dat_file: str = "eels.dat") -> Self:
         """
         Parse eels spectrum.
 
@@ -424,9 +427,9 @@ class Eels(MSONable):
             Eels
         """
         data = np.loadtxt(eels_dat_file)
-        return Eels(data)
+        return cls(data)
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
         """Returns dict representations of Xmu object."""
         dct = MSONable.as_dict(self)
         dct["data"] = self.data.tolist()

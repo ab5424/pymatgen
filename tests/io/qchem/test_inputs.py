@@ -8,6 +8,7 @@ from monty.serialization import loadfn
 
 from pymatgen.core.structure import Molecule
 from pymatgen.io.qchem.inputs import QCInput
+from pymatgen.io.qchem.sets import OptSet
 from pymatgen.util.testing import TEST_FILES_DIR, PymatgenTest
 
 __author__ = "Brandon Wood, Samuel Blau, Shyam Dwaraknath, Julian Self, Evan Spotte-Smith, Ryan Kingsbury"
@@ -17,7 +18,7 @@ __maintainer__ = "Samuel Blau"
 __email__ = "samblau1@gmail.com"
 __credits__ = "Xiaohui Qu"
 
-module_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+module_dir = os.path.dirname(os.path.abspath(__file__))
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +43,6 @@ $end"""
         assert molecule_actual == molecule_test
 
     def test_multi_molecule_template(self):
-        self.maxDiff = None
         species = ["C", "C", "H", "H", "H", "H"]
         coords_1 = [
             [0.000000, 0.000000, 0.000000],
@@ -509,7 +509,7 @@ $end"""
         for i_str in str_actual_list:
             assert i_str in str_test
 
-    def test_from_string(self):
+    def test_from_str(self):
         string = """$molecule
  0  1
  S          -0.00250959       -0.05817469       -0.02921636
@@ -1173,8 +1173,6 @@ $end"""
         assert QCInput.read_almo(str_almo) == result
 
     def test_write_file_from_opt_set(self):
-        from pymatgen.io.qchem.sets import OptSet
-
         odd_dict = loadfn(f"{module_dir}/odd.json")
         odd_mol = odd_dict["spec"]["_tasks"][0]["molecule"]
         qcinp = OptSet(odd_mol)
@@ -1190,8 +1188,6 @@ $end"""
         os.remove(f"{module_dir}/test.qin")
 
     def test_write_file_from_opt_set_with_vdw(self):
-        from pymatgen.io.qchem.sets import OptSet
-
         odd_dict = loadfn(f"{module_dir}/odd.json")
         odd_mol = odd_dict["spec"]["_tasks"][0]["molecule"]
         qcinp = OptSet(odd_mol, overwrite_inputs={"van_der_waals": {"16": 3.14159}})

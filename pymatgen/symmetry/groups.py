@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import re
 import warnings
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from fractions import Fraction
 from itertools import product
@@ -22,6 +22,7 @@ from pymatgen.util.string import Stringify
 
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
+    from typing_extensions import Self
 
     # don't import at runtime to avoid circular import
     from pymatgen.core.lattice import Lattice
@@ -32,7 +33,7 @@ SYMM_DATA = loadfn(os.path.join(os.path.dirname(__file__), "symm_data.json"))
 CrystalSystem = Literal["cubic", "hexagonal", "monoclinic", "orthorhombic", "tetragonal", "triclinic", "trigonal"]
 
 
-class SymmetryGroup(Sequence, Stringify, metaclass=ABCMeta):
+class SymmetryGroup(Sequence, Stringify, ABC):
     """Abstract class representing a symmetry group."""
 
     @property
@@ -53,12 +54,10 @@ class SymmetryGroup(Sequence, Stringify, metaclass=ABCMeta):
         return len(self)
 
     @overload
-    def __getitem__(self, item: int) -> SymmOp:
-        ...
+    def __getitem__(self, item: int) -> SymmOp: ...
 
     @overload
-    def __getitem__(self, item: slice) -> Sequence[SymmOp]:
-        ...
+    def __getitem__(self, item: slice) -> Sequence[SymmOp]: ...
 
     def __getitem__(self, item: int | slice) -> SymmOp | Sequence[SymmOp]:
         return list(self.symmetry_ops)[item]
@@ -155,7 +154,7 @@ class PointGroup(SymmetryGroup):
                 (and also needed for symbolic orbits).
 
         Returns:
-            ([array]) Orbit for point.
+            list[array]: Orbit for point.
         """
         orbit: list[np.ndarray] = []
         for o in self.symmetry_ops:
@@ -219,7 +218,7 @@ class SpaceGroup(SymmetryGroup):
 
         for spg in SpaceGroup.SYMM_OPS:
             if int_symbol in [spg["hermann_mauguin"], spg["universal_h_m"]]:
-                ops = [SymmOp.from_xyz_string(s) for s in spg["symops"]]
+                ops = [SymmOp.from_xyz_str(s) for s in spg["symops"]]
                 self.symbol = re.sub(r":", "", re.sub(r" ", "", spg["universal_h_m"]))
                 if int_symbol in SpaceGroup.sg_encoding:
                     self.full_symbol = SpaceGroup.sg_encoding[int_symbol]["full_symbol"]
@@ -241,17 +240,17 @@ class SpaceGroup(SymmetryGroup):
             # TODO: Support different origin choices.
             enc = list(data["enc"])
             inversion = int(enc.pop(0))
-            ngen = int(enc.pop(0))
+            n_gen = int(enc.pop(0))
             symm_ops = [np.eye(4)]
             if inversion:
                 symm_ops.append(np.array([[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]))
-            for _ in range(ngen):
-                m = np.eye(4)
-                m[:3, :3] = SpaceGroup.gen_matrices[enc.pop(0)]
-                m[0, 3] = SpaceGroup.translations[enc.pop(0)]
-                m[1, 3] = SpaceGroup.translations[enc.pop(0)]
-                m[2, 3] = SpaceGroup.translations[enc.pop(0)]
-                symm_ops.append(m)
+            for _ in range(n_gen):
+                matrix = np.eye(4)
+                matrix[:3, :3] = SpaceGroup.gen_matrices[enc.pop(0)]
+                matrix[0, 3] = SpaceGroup.translations[enc.pop(0)]
+                matrix[1, 3] = SpaceGroup.translations[enc.pop(0)]
+                matrix[2, 3] = SpaceGroup.translations[enc.pop(0)]
+                symm_ops.append(matrix)
             self.generators = symm_ops
             self.full_symbol = data["full_symbol"]
             self.point_group = data["point_group"]
@@ -294,12 +293,15 @@ class SpaceGroup(SymmetryGroup):
             set[str]: All possible settings for the given international symbol.
         """
         symbols = []
+        int_number = None
         if int_symbol in SpaceGroup.abbrev_sg_mapping:
             symbols.append(SpaceGroup.abbrev_sg_mapping[int_symbol])
             int_number = SpaceGroup.sg_encoding[int_symbol]["int_number"]
+
         elif int_symbol in SpaceGroup.full_sg_mapping:
             symbols.append(SpaceGroup.full_sg_mapping[int_symbol])
             int_number = SpaceGroup.sg_encoding[int_symbol]["int_number"]
+
         else:
             for spg in SpaceGroup.SYMM_OPS:
                 if int_symbol in [
@@ -335,7 +337,7 @@ class SpaceGroup(SymmetryGroup):
                 (and also needed for symbolic orbits).
 
         Returns:
-            ([array]) Orbit for point.
+            list[array]: Orbit for point.
         """
         orbit: list[np.ndarray] = []
         for o in self.symmetry_ops:
@@ -345,7 +347,7 @@ class SpaceGroup(SymmetryGroup):
                 orbit.append(pp)
         return orbit
 
-    def get_orbit_and_generators(self, p: ArrayLike, tol: float = 1e-5) -> tuple[list, list]:
+    def get_orbit_and_generators(self, p: ArrayLike, tol: float = 1e-5) -> tuple[list[np.ndarray], list[SymmOp]]:
         """Returns the orbit and its generators for a point.
 
         Args:
@@ -355,7 +357,7 @@ class SpaceGroup(SymmetryGroup):
                 (and also needed for symbolic orbits).
 
         Returns:
-            ([array], [array]) Orbit and generators for point.
+            tuple[list[np.ndarray], list[SymmOp]]: Orbit and generators for point.
         """
         from pymatgen.core.operations import SymmOp
 
@@ -478,7 +480,7 @@ class SpaceGroup(SymmetryGroup):
         return subgroup.is_subgroup(self)
 
     @classmethod
-    def from_int_number(cls, int_number: int, hexagonal: bool = True) -> SpaceGroup:
+    def from_int_number(cls, int_number: int, hexagonal: bool = True) -> Self:
         """Obtains a SpaceGroup from its international number.
 
         Args:
@@ -497,7 +499,7 @@ class SpaceGroup(SymmetryGroup):
         symbol = sg_symbol_from_int_number(int_number, hexagonal=hexagonal)
         if not hexagonal and int_number in (146, 148, 155, 160, 161, 166, 167):
             symbol += ":R"
-        return SpaceGroup(symbol)
+        return cls(symbol)
 
     def __repr__(self) -> str:
         symbol = self.symbol
@@ -511,7 +513,7 @@ class SpaceGroup(SymmetryGroup):
     def to_pretty_string(self) -> str:
         """
         Returns:
-            (str): A pretty string representation of the space group.
+            str: A pretty string representation of the space group.
         """
         return self.symbol
 
@@ -555,7 +557,7 @@ def in_array_list(array_list: list[np.ndarray] | np.ndarray, arr: np.ndarray, to
         tol (float): The tolerance. Defaults to 1e-5. If 0, an exact match is done.
 
     Returns:
-        (bool)
+        bool: True if arr is in array_list.
     """
     if len(array_list) == 0:
         return False

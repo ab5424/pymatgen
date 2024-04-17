@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections import namedtuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pymatgen.core.periodic_table import Species
-from pymatgen.core.structure import Site
+from pymatgen.core import Site, Species
 from pymatgen.core.tensors import SquareTensor
 from pymatgen.core.units import FloatWithUnit
 from pymatgen.util.due import Doi, due
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 __author__ = "Shyam Dwaraknath"
 __copyright__ = "Copyright 2016, The Materials Project"
@@ -37,7 +40,7 @@ class ChemicalShielding(SquareTensor):
     MehringNotation = namedtuple("MehringNotation", "sigma_iso, sigma_11, sigma_22, sigma_33")
     MarylandNotation = namedtuple("MarylandNotation", "sigma_iso, omega, kappa")
 
-    def __new__(cls, cs_matrix, vscale=None):
+    def __new__(cls, cs_matrix, vscale=None) -> Self | None:  # type: ignore[misc]
         """
         Create a Chemical Shielding tensor.
         Note that the constructor uses __new__
@@ -50,7 +53,7 @@ class ChemicalShielding(SquareTensor):
                 or a 1x3 array of the primary sigma values corresponding
                 to the principal axis system
             vscale (6x1 array-like): 6x1 array-like scaling the
-                Voigt-notation vector with the tensor entries
+                Voigt notation vector with the tensor entries
         """
         t_array = np.array(cs_matrix)
 
@@ -101,7 +104,7 @@ class ChemicalShielding(SquareTensor):
         return self.MarylandNotation(sigma_iso, omega, kappa)
 
     @classmethod
-    def from_maryland_notation(cls, sigma_iso, omega, kappa):
+    def from_maryland_notation(cls, sigma_iso, omega, kappa) -> Self:
         """
         Initialize from Maryland notation.
 
@@ -127,7 +130,7 @@ class ElectricFieldGradient(SquareTensor):
     Authors: Shyam Dwaraknath, Xiaohui Qu
     """
 
-    def __new__(cls, efg_matrix, vscale=None):
+    def __new__(cls, efg_matrix, vscale=None) -> Self | None:  # type: ignore[misc]
         """
         Create a Chemical Shielding tensor.
         Note that the constructor uses __new__
@@ -140,7 +143,7 @@ class ElectricFieldGradient(SquareTensor):
                 or a 1x3 array of the primary values corresponding
                 to the principal axis system
             vscale (6x1 array-like): 6x1 array-like scaling the
-                voigt-notation vector with the tensor entries
+                Voigt notation vector with the tensor entries
         """
         t_array = np.array(efg_matrix)
 
@@ -203,7 +206,7 @@ class ElectricFieldGradient(SquareTensor):
                     Can take a isotope or element string, Species object,
                     or Site object
 
-        Return:
+        Returns:
             the coupling constant as a FloatWithUnit in MHz
         """
         planks_constant = FloatWithUnit(6.62607004e-34, "m^2 kg s^-1")
@@ -216,16 +219,16 @@ class ElectricFieldGradient(SquareTensor):
             if len(specie.split("-")) > 1:
                 isotope = str(specie)
                 specie = Species(specie.split("-")[0])
-                Q = specie.get_nmr_quadrupole_moment(isotope)
+                quad_pol_mom = specie.get_nmr_quadrupole_moment(isotope)
             else:
                 specie = Species(specie)
-                Q = specie.get_nmr_quadrupole_moment()
+                quad_pol_mom = specie.get_nmr_quadrupole_moment()
         elif isinstance(specie, Site):
             specie = specie.specie
-            Q = specie.get_nmr_quadrupole_moment()
+            quad_pol_mom = specie.get_nmr_quadrupole_moment()
         elif isinstance(specie, Species):
-            Q = specie.get_nmr_quadrupole_moment()
+            quad_pol_mom = specie.get_nmr_quadrupole_moment()
         else:
             raise ValueError("Invalid species provided for quadrupolar coupling constant calculations")
 
-        return (e * Q * Vzz / planks_constant).to("MHz")
+        return (e * quad_pol_mom * Vzz / planks_constant).to("MHz")

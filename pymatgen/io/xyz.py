@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import re
 from io import StringIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-import numpy as np
 import pandas as pd
 from monty.io import zopen
 
@@ -15,6 +14,9 @@ from pymatgen.core.structure import SiteCollection
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
+
+    from typing_extensions import Self
 
 
 class XYZ:
@@ -35,7 +37,7 @@ class XYZ:
             mol (Molecule | Structure): Input molecule or structure or list thereof.
             coord_precision: Precision to be used for coordinates.
         """
-        self._mols = [mol] if isinstance(mol, SiteCollection) else mol
+        self._mols = cast(list[SiteCollection], [mol] if isinstance(mol, SiteCollection) else mol)
         self.precision = coord_precision
 
     @property
@@ -52,7 +54,7 @@ class XYZ:
         return self._mols  # type: ignore[return-value]
 
     @staticmethod
-    def _from_frame_string(contents) -> Molecule:
+    def _from_frame_str(contents) -> Molecule:
         """Convert a single frame XYZ string to a molecule."""
         lines = contents.split("\n")
         num_sites = int(lines[0])
@@ -72,12 +74,7 @@ class XYZ:
         return Molecule(sp, coords)
 
     @classmethod
-    @np.deprecate(message="Use from_str instead")
-    def from_string(cls, *args, **kwargs):
-        return cls.from_str(*args, **kwargs)
-
-    @staticmethod
-    def from_str(contents) -> XYZ:
+    def from_str(cls, contents: str) -> Self:
         """
         Creates XYZ object from a string.
 
@@ -98,11 +95,11 @@ class XYZ:
         mols = []
         for xyz_match in pat.finditer(contents):
             xyz_text = xyz_match.group(0)
-            mols.append(XYZ._from_frame_string(xyz_text))
-        return XYZ(mols)
+            mols.append(XYZ._from_frame_str(xyz_text))
+        return cls(mols)
 
-    @staticmethod
-    def from_file(filename) -> XYZ:
+    @classmethod
+    def from_file(cls, filename: str | Path) -> Self:
         """
         Creates XYZ object from a file.
 
@@ -112,8 +109,8 @@ class XYZ:
         Returns:
             XYZ object
         """
-        with zopen(filename, "rt") as f:
-            return XYZ.from_str(f.read())
+        with zopen(filename, mode="rt") as file:
+            return cls.from_str(file.read())
 
     def as_dataframe(self):
         """
@@ -132,7 +129,7 @@ class XYZ:
         return df_xyz
 
     def _frame_str(self, frame_mol):
-        output = [str(len(frame_mol)), frame_mol.composition.formula]
+        output = [str(len(frame_mol)), frame_mol.formula]
         prec = self.precision
         fmt = f"{{}} {{:.{prec}f}} {{:.{prec}f}} {{:.{prec}f}}"
         for site in frame_mol:
@@ -149,5 +146,5 @@ class XYZ:
         Args:
             filename (str): File name of output file.
         """
-        with zopen(filename, "wt") as f:
-            f.write(str(self))
+        with zopen(filename, mode="wt") as file:
+            file.write(str(self))

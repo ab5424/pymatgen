@@ -6,6 +6,7 @@ import functools
 import itertools
 import logging
 from operator import mul
+from typing import TYPE_CHECKING
 
 from monty.json import MSONable
 
@@ -13,9 +14,12 @@ from pymatgen.alchemy.filters import RemoveDuplicatesFilter, RemoveExistingFilte
 from pymatgen.alchemy.materials import TransformedStructure
 from pymatgen.alchemy.transmuters import StandardTransmuter
 from pymatgen.analysis.structure_prediction.substitution_probability import SubstitutionProbability
-from pymatgen.core.periodic_table import get_el_sp
+from pymatgen.core import get_el_sp
 from pymatgen.transformations.standard_transformations import SubstitutionTransformation
 from pymatgen.util.due import Doi, due
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 __author__ = "Will Richards, Geoffroy Hautier"
 __copyright__ = "Copyright 2012, The Materials Project"
@@ -37,6 +41,8 @@ class Substitutor(MSONable):
     Data Mined Ionic Substitutions for the Discovery of New Compounds.
     Inorganic Chemistry, 50(2), 656-663. doi:10.1021/ic102031h.
     """
+
+    charge_balanced_tol: float = 1e-9
 
     def __init__(self, threshold=1e-3, symprec: float = 0.1, **kwargs):
         """
@@ -158,9 +164,9 @@ class Substitutor(MSONable):
         return transmuter.transformed_structures
 
     @staticmethod
-    def _is_charge_balanced(struct):
+    def _is_charge_balanced(struct) -> bool:
         """Checks if the structure object is charge balanced."""
-        return sum(site.specie.oxi_state for site in struct) == 0.0
+        return abs(sum(site.specie.oxi_state for site in struct)) < Substitutor.charge_balanced_tol
 
     @staticmethod
     def _is_from_chemical_system(chemical_system, struct):
@@ -172,14 +178,12 @@ class Substitutor(MSONable):
         There are an exceptionally large number of substitutions to
         look at (260^n), where n is the number of species in the
         list. We need a more efficient than brute force way of going
-        through these possibilities. The brute force method would be::
+        through these possibilities. The brute force method would be:
 
             output = []
-            for p in itertools.product(self._sp.species_list
-                                       , repeat = len(species_list)):
-                if self._sp.conditional_probability_list(p, species_list)
-                                       > self._threshold:
-                    output.append(dict(zip(species_list,p)))
+            for p in itertools.product(self._sp.species_list, repeat=len(species_list)):
+                if self._sp.conditional_probability_list(p, species_list) > self._threshold:
+                    output.append(dict(zip(species_list, p)))
             return output
 
         Instead of that we do a branch and bound.
@@ -252,14 +256,14 @@ class Substitutor(MSONable):
         }
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, dct: dict) -> Self:
         """
         Args:
-            d (dict): Dict representation.
+            dct (dict): Dict representation.
 
         Returns:
             Class
         """
-        t = d["threshold"]
-        kwargs = d["kwargs"]
+        t = dct["threshold"]
+        kwargs = dct["kwargs"]
         return cls(threshold=t, **kwargs)

@@ -28,8 +28,8 @@ __maintainer__ = "Matthew McDermott"
 __email__ = "mcdermott@lbl.gov"
 __date__ = "Sep 1, 2021"
 
-with open(os.path.join(os.path.dirname(__file__), "..", "util", "plotly_interface_rxn_layouts.json")) as f:
-    plotly_layouts = json.load(f)
+with open(os.path.join(os.path.dirname(__file__), "..", "util", "plotly_interface_rxn_layouts.json")) as file:
+    plotly_layouts = json.load(file)
 
 
 @due.dcite(
@@ -155,32 +155,32 @@ class InterfacialReactivity(MSONable):
             react_kink = [self._get_reaction(x) for x in x_kink]
             num_atoms = [(x * self.comp1.num_atoms + (1 - x) * self.comp2.num_atoms) for x in x_kink]
             energy_per_rxt_formula = [
-                energy_kink[i]
-                * self._get_elmt_amt_in_rxn(react_kink[i])
-                / num_atoms[i]
+                energy_kink[idx]
+                * self._get_elem_amt_in_rxn(react_kink[idx])
+                / num_atoms[idx]
                 * InterfacialReactivity.EV_TO_KJ_PER_MOL
-                for i in range(2)
+                for idx in range(2)
             ]
         else:
-            for i in reversed(critical_comp):
+            for idx in reversed(critical_comp):
                 # Gets mixing ratio x at kinks.
-                c = self.pd.pd_coords(i)
-                x = float(np.linalg.norm(c - c2_coord) / np.linalg.norm(c1_coord - c2_coord))
+                coords = self.pd.pd_coords(idx)
+                mixing_ratio = float(np.linalg.norm(coords - c2_coord) / np.linalg.norm(c1_coord - c2_coord))
                 # Modifies mixing ratio in case compositions self.comp1 and
                 # self.comp2 are not normalized.
-                x = x * n2 / (n1 + x * (n2 - n1))
-                n_atoms = x * self.comp1.num_atoms + (1 - x) * self.comp2.num_atoms
+                mixing_ratio = mixing_ratio * n2 / (n1 + mixing_ratio * (n2 - n1))
+                n_atoms = mixing_ratio * self.comp1.num_atoms + (1 - mixing_ratio) * self.comp2.num_atoms
                 # Converts mixing ratio in comp1 - comp2 tie line to that in
                 # c1 - c2 tie line.
-                x_converted = self._convert(x, self.factor1, self.factor2)
+                x_converted = self._convert(mixing_ratio, self.factor1, self.factor2)
                 x_kink.append(x_converted)
                 # Gets reaction energy at kinks
-                normalized_energy = self._get_energy(x)
+                normalized_energy = self._get_energy(mixing_ratio)
                 energy_kink.append(normalized_energy)
                 # Gets balanced reaction at kinks
-                rxt = self._get_reaction(x)
+                rxt = self._get_reaction(mixing_ratio)
                 react_kink.append(rxt)
-                rxt_energy = normalized_energy * self._get_elmt_amt_in_rxn(rxt) / n_atoms
+                rxt_energy = normalized_energy * self._get_elem_amt_in_rxn(rxt) / n_atoms
                 energy_per_rxt_formula.append(rxt_energy * self.EV_TO_KJ_PER_MOL)
 
         index_kink = range(1, len(critical_comp) + 1)
@@ -304,7 +304,7 @@ class InterfacialReactivity(MSONable):
 
         reactants = self._get_reactants(x)
 
-        product = [Composition(k.name) for k, v in decomp.items()]
+        product = [Composition(entry.name) for entry in decomp]
         reaction = Reaction(reactants, product)
 
         x_original = self._get_original_composition_ratio(reaction)
@@ -316,7 +316,7 @@ class InterfacialReactivity(MSONable):
 
         return reaction
 
-    def _get_elmt_amt_in_rxn(self, rxn: Reaction) -> int:
+    def _get_elem_amt_in_rxn(self, rxn: Reaction) -> float:
         """
         Computes total number of atoms in a reaction formula for elements
         not in external reservoir. This method is used in the calculation
@@ -467,17 +467,15 @@ class InterfacialReactivity(MSONable):
             The lowest entry energy among entries matching the composition.
         """
         candidate = [
-            i.energy_per_atom
-            for i in pd.qhull_entries
-            if i.composition.fractional_composition == composition.fractional_composition
+            entry.energy_per_atom
+            for entry in pd.qhull_entries
+            if entry.composition.fractional_composition == composition.fractional_composition
         ]
 
         if not candidate:
             warnings.warn(
-                "The reactant " + composition.reduced_formula + " has no matching entry with negative formation"
-                " energy, instead convex hull energy for this"
-                " composition will be used for reaction energy "
-                "calculation. "
+                f"The reactant {composition.reduced_formula} has no matching entry with negative formation"
+                " energy, instead convex hull energy for this composition will be used for reaction energy calculation."
             )
             return pd.get_hull_energy(composition)
         min_entry_energy = min(candidate)
@@ -696,7 +694,7 @@ class GrandPotentialInterfacialReactivity(InterfacialReactivity):
     def _get_reactants(self, x: float) -> list[Composition]:
         """Returns a list of relevant reactant compositions given an x coordinate."""
         reactants = super()._get_reactants(x)
-        reactants += [Composition(e.symbol) for e, v in self.pd.chempots.items()]
+        reactants += [Composition(entry.symbol) for entry in self.pd.chempots]
 
         return reactants
 

@@ -5,11 +5,10 @@ change until best practices are established.
 
 from __future__ import annotations
 
-from pathlib import Path
+from os import PathLike as OsPathLike
 from typing import TYPE_CHECKING, Any, Union
 
-from pymatgen.core.composition import Composition
-from pymatgen.core.periodic_table import DummySpecies, Element, Species
+from pymatgen.core import Composition, DummySpecies, Element, Species
 
 if TYPE_CHECKING:  # needed to avoid circular imports
     from pymatgen.analysis.cost import CostEntry  # type: ignore[attr-defined]
@@ -19,7 +18,8 @@ if TYPE_CHECKING:  # needed to avoid circular imports
     from pymatgen.entries.exp_entries import ExpEntry
 
 
-PathLike = Union[str, Path]
+PathLike = Union[str, OsPathLike]
+PbcLike = tuple[bool, bool, bool]
 
 # Things that can be cast to a Species-like object using get_el_sp
 SpeciesLike = Union[str, Element, Species, DummySpecies]

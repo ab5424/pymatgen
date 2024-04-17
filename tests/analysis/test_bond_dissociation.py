@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import os
-import unittest
+from unittest import TestCase
 
 import pytest
 from monty.serialization import loadfn
 
 from pymatgen.analysis.bond_dissociation import BondDissociationEnergies
 
-module_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-class TestBondDissociation(unittest.TestCase):
+class TestBondDissociation(TestCase):
     def setUp(self):
         pytest.importorskip("openbabel")
         self.PC_65_principle = loadfn(f"{module_dir}/PC_65_principle.json")

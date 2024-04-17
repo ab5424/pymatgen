@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import copy
 import json
-import unittest
+from unittest import TestCase
 
 import numpy as np
 import pytest
@@ -19,13 +20,20 @@ from pymatgen.electronic_structure.bandstructure import (
 from pymatgen.electronic_structure.core import Orbital, Spin
 from pymatgen.electronic_structure.plotter import BSPlotterProjected
 from pymatgen.io.vasp import BSVasprun
-from pymatgen.util.testing import TEST_FILES_DIR, PymatgenTest
+from pymatgen.util.testing import TEST_FILES_DIR, VASP_IN_DIR, VASP_OUT_DIR, PymatgenTest
 
 
-class TestKpoint(unittest.TestCase):
+class TestKpoint(TestCase):
     def setUp(self):
         self.lattice = Lattice.cubic(10.0)
         self.kpoint = Kpoint([0.1, 0.4, -0.5], self.lattice, label="X")
+
+    def test_eq(self):
+        assert self.kpoint == self.kpoint
+        assert self.kpoint == copy.deepcopy(self.kpoint)
+        assert self.kpoint != Kpoint([0.1, 0.4, -0.5], self.lattice, label="Y")
+        assert self.kpoint != Kpoint([0.1, 0.4, -0.6], self.lattice, label="X")
+        assert self.kpoint != Kpoint([0.1, 0.4, -0.5], Lattice.cubic(20.0), label="X")
 
     def test_properties(self):
         assert list(self.kpoint.frac_coords) == [0.1, 0.4, -0.5]
@@ -45,9 +53,9 @@ class TestKpoint(unittest.TestCase):
         assert self.kpoint.as_dict()["ccoords"] == [1.0, 4.0, -5.0]
 
     def test_from_dict(self):
-        d = self.kpoint.as_dict()
+        dct = self.kpoint.as_dict()
 
-        kpoint = Kpoint.from_dict(d)
+        kpoint = Kpoint.from_dict(dct)
 
         assert list(kpoint.frac_coords) == [0.1, 0.4, -0.5]
         assert kpoint.a == 0.1
@@ -219,9 +227,9 @@ class TestBandStructureSymmLine(PymatgenTest):
         assert set(d3) >= expected_keys, f"{expected_keys - set(d3)=}"
 
     def test_old_format_load(self):
-        with open(f"{TEST_FILES_DIR}/bs_ZnS_old.json") as f:
-            d = json.load(f)
-            bs_old = BandStructureSymmLine.from_dict(d)
+        with open(f"{TEST_FILES_DIR}/bs_ZnS_old.json") as file:
+            dct = json.load(file)
+            bs_old = BandStructureSymmLine.from_dict(dct)
             assert bs_old.get_projection_on_elements()[Spin.up][0][0]["Zn"] == 0.0971
 
     def test_apply_scissor_insulator(self):
@@ -256,11 +264,11 @@ class TestReconstructBandStructure(PymatgenTest):
 
     def test_vasprun_bs(self):
         bsv = BSVasprun(
-            f"{TEST_FILES_DIR}/vasprun.xml",
+            f"{VASP_OUT_DIR}/vasprun.xml.gz",
             parse_projected_eigen=True,
             parse_potcar_file=True,
         )
-        bs = bsv.get_band_structure(kpoints_filename=f"{TEST_FILES_DIR}/KPOINTS.band", line_mode=True)
+        bs = bsv.get_band_structure(kpoints_filename=f"{VASP_IN_DIR}/KPOINTS_band", line_mode=True)
         bs.get_projection_on_elements()
 
 
@@ -268,14 +276,14 @@ class TestLobsterBandStructureSymmLine(PymatgenTest):
     def setUp(self):
         with open(
             f"{TEST_FILES_DIR}/cohp/Fatband_SiO2/Test_p/lobster_band_structure_spin.json",
-        ) as f:
-            bs_spin_dict = json.load(f)
+        ) as file:
+            bs_spin_dict = json.load(file)
         self.bs_spin = LobsterBandStructureSymmLine.from_dict(bs_spin_dict)
 
         with open(
             f"{TEST_FILES_DIR}/cohp/Fatband_SiO2/Test_p/lobster_band_structure.json",
-        ) as f:
-            bs_dict = json.load(f)
+        ) as file:
+            bs_dict = json.load(file)
         self.bs_p = LobsterBandStructureSymmLine.from_dict(bs_dict)
 
     def test_basic(self):
@@ -341,9 +349,16 @@ class TestLobsterBandStructureSymmLine(PymatgenTest):
         assert dict_here["O"]["2p"] == approx(0.015)
 
     def test_proj_bandstructure_plot(self):
-        # make sure that it can be plotted!
-        BSPlotterProjected(self.bs_spin).get_elt_projected_plots()
-        BSPlotterProjected(self.bs_spin).get_projected_plots_dots({"Si": ["3s"]})
+        axs = BSPlotterProjected(self.bs_spin).get_elt_projected_plots()
+        assert isinstance(axs, np.ndarray)
+        assert axs.shape == (2, 2)
+        assert axs[0, 0].get_title() == "Si"
+        assert axs[0, 1].get_title() == "O"
+        assert axs[1, 0].get_title() == ""
+        axs = BSPlotterProjected(self.bs_spin).get_projected_plots_dots({"Si": ["3s"]})
+        assert isinstance(axs, list)
+        assert len(axs) == 1
+        assert axs[0].get_title() == "Si 3s"
 
     def test_get_branch(self):
         branch = self.bs_p.get_branch(0)[0]

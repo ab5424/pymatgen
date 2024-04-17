@@ -8,6 +8,7 @@ import numpy as np
 import scipy.constants as const
 from monty.dev import requires
 from monty.json import MSONable
+from scipy.interpolate import UnivariateSpline
 
 from pymatgen.core import Structure
 from pymatgen.core.lattice import Lattice
@@ -18,15 +19,16 @@ from pymatgen.phonon.dos import PhononDos
 try:
     import phonopy
     from phonopy.phonon.dos import TotalDos
-except ImportError as exc:
-    print(exc)
+except ImportError:
     phonopy = None
+    TotalDos = None
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Literal
 
     from numpy.typing import ArrayLike
+    from typing_extensions import Self
 
 __author__ = "A. Bonkowski, J. George, G. Petretto"
 __copyright__ = "Copyright 2021, The Materials Project"
@@ -57,7 +59,7 @@ class GruneisenParameter(MSONable):
             multiplicities: list of multiplicities
             structure: The crystal structure (as a pymatgen Structure object) associated with the gruneisen parameters.
             lattice: The reciprocal lattice as a pymatgen Lattice object. Pymatgen uses the physics convention of
-                     reciprocal lattice vectors WITH a 2*pi coefficient.
+                reciprocal lattice vectors WITH a 2*pi coefficient.
         """
         self.qpoints = qpoints
         self.gruneisen = gruneisen
@@ -194,8 +196,6 @@ class GruneisenParameter(MSONable):
     @property
     def debye_temp_limit(self) -> float:
         """Debye temperature in K. Adapted from apipy."""
-        from scipy.interpolate import UnivariateSpline
-
         f_mesh = self.tdos.frequency_points * const.tera
         dos = self.tdos.dos
 
@@ -313,7 +313,7 @@ class GruneisenPhononBandStructure(PhononBandStructure):
         return dct
 
     @classmethod
-    def from_dict(cls, dct: dict) -> GruneisenPhononBandStructure:
+    def from_dict(cls, dct: dict) -> Self:
         """
         Args:
             dct (dict): Dict representation.
@@ -394,10 +394,10 @@ class GruneisenPhononBandStructureSymmLine(GruneisenPhononBandStructure, PhononB
         )
 
     @classmethod
-    def from_dict(cls, dct: dict) -> GruneisenPhononBandStructureSymmLine:
+    def from_dict(cls, dct: dict) -> Self:
         """
         Args:
-            dct: Dict representation.
+            dct (dict): Dict representation.
 
         Returns:
             GruneisenPhononBandStructureSymmLine

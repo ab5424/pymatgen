@@ -11,18 +11,21 @@ import re
 from typing import TYPE_CHECKING, Any
 from warnings import warn
 
-import numpy as np
 from monty.json import MSONable, jsanitize
 
 from pymatgen.core.structure import Structure
 from pymatgen.io.cif import CifParser
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.io.vasp.sets import MPRelaxSet, VaspInputSet
+from pymatgen.transformations.transformation_abc import AbstractTransformation
 from pymatgen.util.provenance import StructureNL
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from typing_extensions import Self
+
     from pymatgen.alchemy.filters import AbstractStructureFilter
-    from pymatgen.transformations.transformation_abc import AbstractTransformation
 
 
 class TransformedStructure(MSONable):
@@ -36,7 +39,7 @@ class TransformedStructure(MSONable):
     def __init__(
         self,
         structure: Structure,
-        transformations: list[AbstractTransformation] | None = None,
+        transformations: AbstractTransformation | Sequence[AbstractTransformation] | None = None,
         history: list[AbstractTransformation | dict[str, Any]] | None = None,
         other_parameters: dict[str, Any] | None = None,
     ) -> None:
@@ -44,8 +47,7 @@ class TransformedStructure(MSONable):
 
         Args:
             structure (Structure): Input structure
-            transformations (list[Transformation]): List of transformations to
-                apply.
+            transformations (list[Transformation]): List of transformations to apply.
             history (list[Transformation]): Previous history.
             other_parameters (dict): Additional parameters to be added.
         """
@@ -54,6 +56,8 @@ class TransformedStructure(MSONable):
         self.other_parameters = other_parameters or {}
         self._undone: list[tuple[AbstractTransformation | dict[str, Any], Structure]] = []
 
+        if isinstance(transformations, AbstractTransformation):
+            transformations = [transformations]
         transformations = transformations or []
         for trafo in transformations:
             self.append_transformation(trafo)
@@ -83,12 +87,13 @@ class TransformedStructure(MSONable):
         """
         if len(self._undone) == 0:
             raise IndexError("No more changes to redo")
-        h, s = self._undone.pop()
-        self.history.append(h)
-        self.final_structure = s
+        hist, struct = self._undone.pop()
+        self.history.append(hist)
+        self.final_structure = struct
 
-    def __getattr__(self, name) -> Any:
-        struct = object.__getattribute__(self, "final_structure")
+    def __getattr__(self, name: str) -> Any:
+        # Don't use getattr(self.final_structure, name) here to avoid infinite recursion if name = "final_structure"
+        struct = self.__getattribute__("final_structure")
         return getattr(struct, name)
 
     def __len__(self) -> int:
@@ -163,7 +168,9 @@ class TransformedStructure(MSONable):
         self.history.append(h_dict)
 
     def extend_transformations(
-        self, transformations: list[AbstractTransformation], return_alternatives: bool = False
+        self,
+        transformations: list[AbstractTransformation],
+        return_alternatives: bool = False,
     ) -> None:
         """Extends a sequence of transformations to the TransformedStructure.
 
@@ -174,14 +181,14 @@ class TransformedStructure(MSONable):
                 return_alternatives can be a number, which stipulates the
                 total number of structures to return.
         """
-        for t in transformations:
-            self.append_transformation(t, return_alternatives=return_alternatives)
+        for trafo in transformations:
+            self.append_transformation(trafo, return_alternatives=return_alternatives)
 
     def get_vasp_input(self, vasp_input_set: type[VaspInputSet] = MPRelaxSet, **kwargs) -> dict[str, Any]:
         """Returns VASP input as a dict of VASP objects.
 
         Args:
-            vasp_input_set (pymatgen.io.vasp.sets.VaspInputSet): input set
+            vasp_input_set (VaspInputSet): input set
                 to create VASP input files from structures
             **kwargs: All keyword args supported by the VASP input set.
         """
@@ -207,25 +214,36 @@ class TransformedStructure(MSONable):
             **kwargs: All keyword args supported by the VASP input set.
         """
         vasp_input_set(self.final_structure, **kwargs).write_input(output_dir, make_dir_if_not_present=create_directory)
-        with open(f"{output_dir}/transformations.json", "w") as fp:
-            json.dump(self.as_dict(), fp)
+        with open(f"{output_dir}/transformations.json", mode="w", encoding="utf-8") as file:
+            json.dump(self.as_dict(), file)
 
     def __str__(self) -> str:
-        output = ["Current structure", "------------", str(self.final_structure), "\nHistory", "------------"]
+        output = [
+            "Current structure",
+            "------------",
+            str(self.final_structure),
+            "\nHistory",
+            "------------",
+        ]
         for hist in self.history:
             hist.pop("input_structure", None)
             output.append(str(hist))
         output.extend(("\nOther parameters", "------------", str(self.other_parameters)))
         return "\n".join(output)
 
-    def set_parameter(self, key: str, value: Any) -> None:
+    def set_parameter(self, key: str, value: Any) -> TransformedStructure:
         """Sets a parameter.
 
         Args:
             key (str): The string key.
             value (Any): The value.
+
+        Returns:
+            TransformedStructure
         """
         self.other_parameters[key] = value
+
+        return self
 
     @property
     def was_modified(self) -> bool:
@@ -245,18 +263,13 @@ class TransformedStructure(MSONable):
         return [*h_structs, self.final_structure]
 
     @classmethod
-    @np.deprecate(message="Use from_cif_str instead")
-    def from_cif_string(cls, *args, **kwargs):  # noqa: D102
-        return cls.from_cif_str(*args, **kwargs)
-
-    @classmethod
     def from_cif_str(
         cls,
         cif_string: str,
         transformations: list[AbstractTransformation] | None = None,
         primitive: bool = True,
         occupancy_tolerance: float = 1.0,
-    ) -> TransformedStructure:
+    ) -> Self:
         """Generates TransformedStructure from a cif string.
 
         Args:
@@ -269,7 +282,7 @@ class TransformedStructure(MSONable):
                 extracted. Defaults to True. However, there are certain
                 instances where you might want to use a non-primitive cell,
                 e.g., if you are trying to generate all possible orderings of
-                partial removals or order a disordered structure.
+                partial removals or order a disordered structure. Defaults to True.
             occupancy_tolerance (float): If total occupancy of a site is
                 between 1 and occupancy_tolerance, the occupancies will be
                 scaled down to 1.
@@ -281,7 +294,7 @@ class TransformedStructure(MSONable):
         raw_string = re.sub(r"'", '"', cif_string)
         cif_dict = parser.as_dict()
         cif_keys = list(cif_dict)
-        struct = parser.get_structures(primitive)[0]
+        struct = parser.parse_structures(primitive=primitive)[0]
         partial_cif = cif_dict[cif_keys[0]]
         if "_database_code_ICSD" in partial_cif:
             source = partial_cif["_database_code_ICSD"] + "-ICSD"
@@ -296,14 +309,11 @@ class TransformedStructure(MSONable):
         return cls(struct, transformations, history=[source_info])
 
     @classmethod
-    @np.deprecate(message="Use from_poscar_str instead")
-    def from_poscar_string(cls, *args, **kwargs):  # noqa: D102
-        return cls.from_poscar_str(*args, **kwargs)
-
-    @classmethod
     def from_poscar_str(
-        cls, poscar_string: str, transformations: list[AbstractTransformation] | None = None
-    ) -> TransformedStructure:
+        cls,
+        poscar_string: str,
+        transformations: list[AbstractTransformation] | None = None,
+    ) -> Self:
         """Generates TransformedStructure from a poscar string.
 
         Args:
@@ -331,24 +341,26 @@ class TransformedStructure(MSONable):
         dct["@module"] = type(self).__module__
         dct["@class"] = type(self).__name__
         dct["history"] = jsanitize(self.history)
-        dct["last_modified"] = str(datetime.datetime.utcnow())
+        dct["last_modified"] = str(datetime.datetime.now(datetime.timezone.utc))
         dct["other_parameters"] = jsanitize(self.other_parameters)
         return dct
 
     @classmethod
-    def from_dict(cls, dct) -> TransformedStructure:
+    def from_dict(cls, dct: dict) -> Self:
         """Creates a TransformedStructure from a dict."""
         struct = Structure.from_dict(dct)
         return cls(struct, history=dct["history"], other_parameters=dct.get("other_parameters"))
 
-    def to_snl(self, authors, **kwargs) -> StructureNL:
-        """Generate SNL from TransformedStructure.
+    def to_snl(self, authors: list[str], **kwargs) -> StructureNL:
+        """
+        Generate a StructureNL from TransformedStructure.
 
-        :param authors: List of authors
-        :param **kwargs: All kwargs supported by StructureNL.
+        Args:
+            authors (List[str]): List of authors contributing to the generated StructureNL.
+            **kwargs (Any): All kwargs supported by StructureNL.
 
         Returns:
-            StructureNL
+            StructureNL: The generated StructureNL object.
         """
         if self.other_parameters:
             warn("Data in TransformedStructure.other_parameters discarded during type conversion to SNL")
@@ -366,7 +378,7 @@ class TransformedStructure(MSONable):
         return StructureNL(self.final_structure, authors, history=history, **kwargs)
 
     @classmethod
-    def from_snl(cls, snl: StructureNL) -> TransformedStructure:
+    def from_snl(cls, snl: StructureNL) -> Self:
         """Create TransformedStructure from SNL.
 
         Args:

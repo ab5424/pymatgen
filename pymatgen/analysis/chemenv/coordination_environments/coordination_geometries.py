@@ -13,10 +13,14 @@ import abc
 import itertools
 import json
 import os
+from typing import TYPE_CHECKING
 
 import numpy as np
 from monty.json import MontyDecoder, MSONable
 from scipy.special import factorial
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 __author__ = "David Waroquiers"
 __copyright__ = "Copyright 2012, The Materials Project"
@@ -34,7 +38,7 @@ EXPLICIT_PERMUTATIONS = "EXPLICIT_PERMUTATIONS"
 SEPARATION_PLANE = "SEPARATION_PLANE"
 
 
-class AbstractChemenvAlgorithm(MSONable, metaclass=abc.ABCMeta):
+class AbstractChemenvAlgorithm(MSONable, abc.ABC):
     """
     Base class used to define a Chemenv algorithm used to identify the correct permutation for the computation
     of the Continuous Symmetry Measure.
@@ -109,7 +113,7 @@ class ExplicitPermutationsAlgorithm(AbstractChemenvAlgorithm):
         }
 
     @classmethod
-    def from_dict(cls, dct):
+    def from_dict(cls, dct: dict) -> Self:
         """
         Reconstruct ExplicitPermutationsAlgorithm from its JSON-serializable dict representation.
         """
@@ -241,7 +245,7 @@ class SeparationPlane(AbstractChemenvAlgorithm):
                 number of permutations.
             add_opposite: Whether to add the permutations from the second group before the first group as well.
 
-        Returns
+        Returns:
             list[int]: safe permutations.
         """
         s0 = list(range(len(self.point_groups[0])))
@@ -324,7 +328,7 @@ class SeparationPlane(AbstractChemenvAlgorithm):
         }
 
     @classmethod
-    def from_dict(cls, dct):
+    def from_dict(cls, dct: dict) -> Self:
         """
         Reconstructs the SeparationPlane algorithm from its JSON-serializable dict representation.
 
@@ -397,7 +401,7 @@ class CoordinationGeometry:
             """
             if hints_info["csm"] > self.options["csm_max"]:
                 return []
-            return object.__getattribute__(self, f"{self.hints_type}_hints")(hints_info)
+            return getattr(self, f"{self.hints_type}_hints")(hints_info)
 
         def single_cap_hints(self, hints_info):
             """Return hints for an additional neighbors set, i.e. the voronoi indices that
@@ -497,7 +501,7 @@ class CoordinationGeometry:
             return {"hints_type": self.hints_type, "options": self.options}
 
         @classmethod
-        def from_dict(cls, dct):
+        def from_dict(cls, dct: dict) -> Self:
             """Reconstructs the NeighborsSetsHints from its JSON-serializable dict representation."""
             return cls(hints_type=dct["hints_type"], options=dct["options"])
 
@@ -592,7 +596,7 @@ class CoordinationGeometry:
         }
 
     @classmethod
-    def from_dict(cls, dct):
+    def from_dict(cls, dct: dict) -> Self:
         """
         Reconstructs the CoordinationGeometry from its JSON-serializable dict representation.
 
@@ -602,7 +606,6 @@ class CoordinationGeometry:
         Returns:
             CoordinationGeometry
         """
-        dec = MontyDecoder()
         return cls(
             mp_symbol=dct["mp_symbol"],
             name=dct["name"],
@@ -620,7 +623,7 @@ class CoordinationGeometry:
             deactivate=dct["deactivate"],
             faces=dct["_faces"],
             edges=dct["_edges"],
-            algorithms=[dec.process_decoded(algo_d) for algo_d in dct["_algorithms"]]
+            algorithms=[MontyDecoder().process_decoded(algo_d) for algo_d in dct["_algorithms"]]
             if dct["_algorithms"] is not None
             else None,
             equivalent_indices=dct.get("equivalent_indices"),
@@ -697,15 +700,15 @@ class CoordinationGeometry:
             if self.ce_symbol in ["S:1", "L:2"]:
                 self._pauling_stability_ratio = 0.0
             else:
-                min_dist_anions = 1000000.0
-                min_dist_cation_anion = 1000000.0
+                min_dist_anions = 1_000_000
+                min_dist_cation_anion = 1_000_000
                 for ipt1 in range(len(self.points)):
                     pt1 = np.array(self.points[ipt1])
                     min_dist_cation_anion = min(min_dist_cation_anion, np.linalg.norm(pt1 - self.central_site))
                     for ipt2 in range(ipt1 + 1, len(self.points)):
                         pt2 = np.array(self.points[ipt2])
                         min_dist_anions = min(min_dist_anions, np.linalg.norm(pt1 - pt2))
-                anion_radius = min_dist_anions / 2.0
+                anion_radius = min_dist_anions / 2
                 cation_radius = min_dist_cation_anion - anion_radius
                 self._pauling_stability_ratio = cation_radius / anion_radius
         return self._pauling_stability_ratio
@@ -794,7 +797,7 @@ class CoordinationGeometry:
         list of its vertices coordinates.
         """
         coords = [site.coords for site in sites] if permutation is None else [sites[ii].coords for ii in permutation]
-        return [[coords[ii] for ii in f] for f in self._faces]
+        return [[coords[ii] for ii in face] for face in self._faces]
 
     def edges(self, sites, permutation=None, input="sites"):
         """
@@ -811,7 +814,7 @@ class CoordinationGeometry:
         #     coords = [sites[ii].coords for ii in permutation]
         if permutation is not None:
             coords = [coords[ii] for ii in permutation]
-        return [[coords[ii] for ii in e] for e in self._edges]
+        return [[coords[ii] for ii in edge] for edge in self._edges]
 
     def solid_angles(self, permutation=None):
         """
@@ -851,11 +854,11 @@ class CoordinationGeometry:
             elif len(face) == 4:
                 out += "5\n"
             else:
-                for ii, f in enumerate(face):
+                for ii, f in enumerate(face, start=1):
                     out += "4\n"
                     out += f"{len(_vertices) + iface}\n"
                     out += f"{f}\n"
-                    out += f"{face[np.mod(ii + 1, len(face))]}\n"
+                    out += f"{face[np.mod(ii, len(face))]}\n"
                     out += f"{len(_vertices) + iface}\n"
             if len(face) in [3, 4]:
                 for face_vertex in face:
@@ -882,19 +885,19 @@ class AllCoordinationGeometries(dict):
         dict.__init__(self)
         self.cg_list = []
         if only_symbols is None:
-            with open(f"{module_dir}/coordination_geometries_files/allcg.txt") as f:
-                data = f.readlines()
+            with open(f"{module_dir}/coordination_geometries_files/allcg.txt") as file:
+                data = file.readlines()
             for line in data:
                 cg_file = f"{module_dir}/{line.strip()}"
-                with open(cg_file) as f:
-                    dd = json.load(f)
+                with open(cg_file) as file:
+                    dd = json.load(file)
                 self.cg_list.append(CoordinationGeometry.from_dict(dd))
         else:
             for symbol in only_symbols:
                 fsymbol = symbol.replace(":", "#")
                 cg_file = f"{module_dir}/coordination_geometries_files/{fsymbol}.json"
-                with open(cg_file) as f:
-                    dd = json.load(f)
+                with open(cg_file) as file:
+                    dd = json.load(file)
                 self.cg_list.append(CoordinationGeometry.from_dict(dd))
 
         self.cg_list.append(CoordinationGeometry(UNKNOWN_ENVIRONMENT_SYMBOL, "Unknown environment", deactivate=True))
@@ -1186,7 +1189,8 @@ class AllCoordinationGeometries(dict):
                 return True
             except LookupError:
                 return True
-        raise Exception("Should not be here !")
+        # TODO give a more helpful error message that suggests possible reasons and solutions
+        raise RuntimeError("Should not be here!")
 
     def pretty_print(self, type="implemented_geometries", maxcn=8, additional_info=None):
         """

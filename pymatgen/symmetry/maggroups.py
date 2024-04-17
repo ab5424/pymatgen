@@ -21,6 +21,8 @@ from pymatgen.util.string import transformation_to_string
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from typing_extensions import Self
+
     from pymatgen.core.lattice import Lattice
 
 __author__ = "Matthew Horton, Shyue Ping Ong"
@@ -121,10 +123,10 @@ class MagneticSpaceGroup(SymmetryGroup):
         raw_data = list(c.fetchone())
 
         # Jones Faithful transformation
-        self.jf = JonesFaithfulTransformation.from_transformation_string("a,b,c;0,0,0")
+        self.jf = JonesFaithfulTransformation.from_transformation_str("a,b,c;0,0,0")
         if isinstance(setting_transformation, str):
             if setting_transformation != "a,b,c;0,0,0":
-                self.jf = JonesFaithfulTransformation.from_transformation_string(setting_transformation)
+                self.jf = JonesFaithfulTransformation.from_transformation_str(setting_transformation)
         elif isinstance(setting_transformation, JonesFaithfulTransformation) and setting_transformation != self.jf:
             self.jf = setting_transformation
 
@@ -191,10 +193,10 @@ class MagneticSpaceGroup(SymmetryGroup):
             n = 1  # nth Wyckoff site
             num_wyckoff = b[0]
             while len(wyckoff_sites) < num_wyckoff:
-                m = b[1 + o]  # multiplicity
-                label = str(b[2 + o] * m) + get_label(num_wyckoff - n)
+                multiplicity = b[1 + o]
+                label = str(b[2 + o] * multiplicity) + get_label(num_wyckoff - n)
                 sites = []
-                for j in range(m):
+                for j in range(multiplicity):
                     s = b[3 + o + (j * 22) : 3 + o + (j * 22) + 22]  # data corresponding to specific Wyckoff position
                     translation_vec = [s[0] / s[3], s[1] / s[3], s[2] / s[3]]
                     matrix = [
@@ -225,7 +227,7 @@ class MagneticSpaceGroup(SymmetryGroup):
                 # could do something else with these in future
                 wyckoff_sites.append({"label": label, "str": " ".join(s["str"] for s in sites)})
                 n += 1
-                o += m * 22 + 2
+                o += multiplicity * 22 + 2
 
             return wyckoff_sites
 
@@ -284,7 +286,7 @@ class MagneticSpaceGroup(SymmetryGroup):
         db.close()
 
     @classmethod
-    def from_og(cls, label: Sequence[int] | str) -> MagneticSpaceGroup:
+    def from_og(cls, label: Sequence[int] | str) -> Self:
         """Initialize from Opechowski and Guccione (OG) label or number.
 
         Args:
@@ -441,7 +443,7 @@ class MagneticSpaceGroup(SymmetryGroup):
         # parse data into strings
 
         # indicate if non-standard setting specified
-        if self.jf != JonesFaithfulTransformation.from_transformation_string("a,b,c;0,0,0"):
+        if self.jf != JonesFaithfulTransformation.from_transformation_str("a,b,c;0,0,0"):
             description += "Non-standard setting: .....\n"
             description += repr(self.jf)
             description += "\n\nStandard setting information: \n"
@@ -562,5 +564,5 @@ def _write_all_magnetic_space_groups_to_file(filename):
         all_msgs.append(MagneticSpaceGroup(i))
     for msg in all_msgs:
         out += f"\n{msg.data_str()}\n\n--------\n"
-    with open(filename, "w") as f:
-        f.write(out)
+    with open(filename, mode="w") as file:
+        file.write(out)

@@ -40,9 +40,7 @@ from monty.dev import requires
 from monty.fractions import lcm
 from monty.tempfile import ScratchDir
 
-from pymatgen.core.periodic_table import DummySpecies
-from pymatgen.core.sites import PeriodicSite
-from pymatgen.core.structure import Structure
+from pymatgen.core import DummySpecies, PeriodicSite, Structure
 from pymatgen.io.vasp.inputs import Poscar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
@@ -201,7 +199,7 @@ class EnumlibAdaptor:
         target_sg_num = get_sg_info(list(symmetrized_structure))
         curr_sites = list(itertools.chain.from_iterable(disordered_sites))
         sg_num = get_sg_info(curr_sites)
-        ordered_sites = sorted(ordered_sites, key=lambda sites: len(sites))
+        ordered_sites = sorted(ordered_sites, key=len)
         logger.debug(f"Disordered sites has sg # {sg_num}")
         self.ordered_sites = []
 
@@ -245,8 +243,8 @@ class EnumlibAdaptor:
             n_disordered
             * lcm(
                 *(
-                    f.limit_denominator(n_disordered * self.max_cell_size).denominator
-                    for f in map(fractions.Fraction, index_amounts)
+                    fraction.limit_denominator(n_disordered * self.max_cell_size).denominator
+                    for fraction in map(fractions.Fraction, index_amounts)
                 )
             )
         )
@@ -258,7 +256,7 @@ class EnumlibAdaptor:
         # enumeration. See Cu7Te5.cif test file.
         base *= 10
 
-        # base = n_disordered # 10 ** int(math.ceil(math.log10(n_disordered)))
+        # base = n_disordered # 10 ** math.ceil(math.log10(n_disordered))
         # To get a reasonable number of structures, we fix concentrations to the
         # range expected in the original structure.
         total_amounts = sum(index_amounts)
@@ -268,12 +266,12 @@ class EnumlibAdaptor:
             if abs(conc * base - round(conc * base)) < 1e-5:
                 output.append(f"{int(round(conc * base))} {int(round(conc * base))} {base}")
             else:
-                min_conc = int(math.floor(conc * base))
+                min_conc = math.floor(conc * base)
                 output.append(f"{min_conc - 1} {min_conc + 1} {base}")
         output.append("")
         logger.debug("Generated input file:\n" + "\n".join(output))
-        with open("struct_enum.in", "w") as f:
-            f.write("\n".join(output))
+        with open("struct_enum.in", mode="w") as file:
+            file.write("\n".join(output))
 
     def _run_multienum(self):
         with subprocess.Popen([enum_cmd], stdout=subprocess.PIPE, stdin=subprocess.PIPE, close_fds=True) as p:
@@ -319,7 +317,7 @@ class EnumlibAdaptor:
             stdin=subprocess.PIPE,
             close_fds=True,
         ) as rs:
-            stdout, stderr = rs.communicate()
+            _stdout, stderr = rs.communicate()
         if stderr:
             logger.warning(stderr.decode())
 
@@ -355,8 +353,8 @@ class EnumlibAdaptor:
             inv_org_latt = None
 
         for file in glob("vasp.*"):
-            with open(file) as f:
-                data = f.read()
+            with open(file) as file:
+                data = file.read()
                 data = re.sub(r"scale factor", "1", data)
                 data = re.sub(r"(\d+)-(\d+)", r"\1 -\2", data)
                 poscar = Poscar.from_str(data, self.index_species)
