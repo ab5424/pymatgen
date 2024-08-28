@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import multiprocessing
 from unittest import TestCase
 
@@ -15,7 +14,7 @@ from pymatgen.core.ion import Ion
 from pymatgen.entries.computed_entries import ComputedEntry
 from pymatgen.util.testing import TEST_FILES_DIR, PymatgenTest
 
-logger = logging.getLogger(__name__)
+TEST_DIR = f"{TEST_FILES_DIR}/analysis/pourbaix_diagram"
 
 
 class TestPourbaixEntry(PymatgenTest):
@@ -101,7 +100,7 @@ class TestPourbaixEntry(PymatgenTest):
 class TestPourbaixDiagram(TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.test_data = loadfn(f"{TEST_FILES_DIR}/pourbaix_test_data.json")
+        cls.test_data = loadfn(f"{TEST_DIR}/pourbaix_test_data.json")
         cls.pbx = PourbaixDiagram(cls.test_data["Zn"], filter_solids=True)
         cls.pbx_no_filter = PourbaixDiagram(cls.test_data["Zn"], filter_solids=False)
 
@@ -290,7 +289,7 @@ class TestPourbaixDiagram(TestCase):
 
 class TestPourbaixPlotter(TestCase):
     def setUp(self):
-        self.test_data = loadfn(f"{TEST_FILES_DIR}/pourbaix_test_data.json")
+        self.test_data = loadfn(f"{TEST_DIR}/pourbaix_test_data.json")
         self.pd = PourbaixDiagram(self.test_data["Zn"])
         self.plotter = PourbaixPlotter(self.pd)
 

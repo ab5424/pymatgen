@@ -27,7 +27,7 @@ class StructInputFile(InputFile):
         return str(cw)
 
     @classmethod
-    def from_str(cls, contents: str) -> Self:  # type: ignore[override]
+    def from_str(cls, contents: str) -> Self:
         struct = Structure.from_str(contents, fmt="cif")
         return cls(structure=struct)
 
@@ -49,14 +49,14 @@ class TestInputFile(PymatgenTest):
         with pytest.raises(FileNotFoundError, match="No such file or directory: 'fakepath.cif'"):
             StructInputFile.from_file("fakepath.cif")
 
-        sif = StructInputFile.from_file(f"{TEST_FILES_DIR}/Li.cif")
+        sif = StructInputFile.from_file(f"{TEST_FILES_DIR}/cif/Li.cif")
         assert isinstance(sif.structure, Structure)
 
         sif.write_file("newLi.cif")
         assert os.path.isfile("newLi.cif")
 
     def test_msonable(self):
-        sif = StructInputFile.from_file(f"{TEST_FILES_DIR}/Li.cif")
+        sif = StructInputFile.from_file(f"{TEST_FILES_DIR}/cif/Li.cif")
         sif_dict = sif.as_dict()
         decoder = MontyDecoder()
         temp_sif = decoder.process_decoded(sif_dict)
@@ -67,9 +67,9 @@ class TestInputFile(PymatgenTest):
 class TestInputSet(PymatgenTest):
     @classmethod
     def setUpClass(cls):
-        cls.sif1 = StructInputFile.from_file(f"{TEST_FILES_DIR}/Li.cif")
-        cls.sif2 = StructInputFile.from_file(f"{TEST_FILES_DIR}/LiFePO4.cif")
-        cls.sif3 = StructInputFile.from_file(f"{TEST_FILES_DIR}/Li2O.cif")
+        cls.sif1 = StructInputFile.from_file(f"{TEST_FILES_DIR}/cif/Li.cif")
+        cls.sif2 = StructInputFile.from_file(f"{TEST_FILES_DIR}/cif/LiFePO4.cif")
+        cls.sif3 = StructInputFile.from_file(f"{TEST_FILES_DIR}/cif/Li2O.cif")
 
     def test_mapping(self):
         sif1, sif2, sif3 = self.sif1, self.sif2, self.sif3
@@ -82,7 +82,7 @@ class TestInputSet(PymatgenTest):
             _ = inp_set.kwarg3
         expected = [("cif1", sif1), ("cif2", sif2), ("cif3", sif3)]
 
-        for (fname, contents), (exp_fname, exp_contents) in zip(inp_set.items(), expected):
+        for (fname, contents), (exp_fname, exp_contents) in zip(inp_set.items(), expected, strict=True):
             assert fname == exp_fname
             assert contents is exp_contents
 
@@ -90,7 +90,7 @@ class TestInputSet(PymatgenTest):
         with pytest.raises(KeyError, match="'kwarg1'"):
             inp_set["kwarg1"]
 
-        sif4 = StructInputFile.from_file(f"{TEST_FILES_DIR}/CuCl.cif")
+        sif4 = StructInputFile.from_file(f"{TEST_FILES_DIR}/cif/CuCl.cif")
         inp_set["cif4"] = sif4
         assert inp_set.inputs["cif4"] is sif4
         assert len(inp_set) == 4
@@ -100,7 +100,7 @@ class TestInputSet(PymatgenTest):
 
         assert len(inp_set) == 2
         expected = [("cif1", sif1), ("cif3", sif3)]
-        for (fname, contents), (exp_fname, exp_contents) in zip(inp_set.items(), expected):
+        for (fname, contents), (exp_fname, exp_contents) in zip(inp_set.items(), expected, strict=True):
             assert fname == exp_fname
             assert contents is exp_contents
 
@@ -133,7 +133,7 @@ class TestInputSet(PymatgenTest):
         assert temp_inp_set.kwarg1 == 1
         assert temp_inp_set.kwarg2 == "hello"
         assert temp_inp_set._kwargs == inp_set._kwargs
-        for (fname, contents), (fname2, contents2) in zip(temp_inp_set.items(), inp_set.items()):
+        for (fname, contents), (fname2, contents2) in zip(temp_inp_set.items(), inp_set.items(), strict=True):
             assert fname == fname2
             assert contents.structure == contents2.structure
 

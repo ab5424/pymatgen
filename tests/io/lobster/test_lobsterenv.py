@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from unittest import TestCase
 
 import numpy as np
@@ -22,8 +21,7 @@ __version__ = "0.1"
 __email__ = "janine.george@uclouvain.be"
 __date__ = "Jan 14, 2021"
 
-TEST_DIR = f"{TEST_FILES_DIR}/cohp/environments"
-module_dir = os.path.dirname(os.path.abspath(__file__))
+TEST_DIR = f"{TEST_FILES_DIR}/electronic_structure/cohp/environments"
 
 
 class TestLobsterNeighbors(TestCase):
@@ -688,7 +686,7 @@ class TestLobsterNeighbors(TestCase):
         lse2 = self.chem_env_lobster1.get_light_structure_environment()
         assert lse2.coordination_environments[0][0]["ce_symbol"] == "O:6"
 
-    def test_get_strucuture_environments_further_tests(self):
+    def test_get_structure_environments_further_tests(self):
         lse = self.chem_env_lobster1_second.get_light_structure_environment()
         lse.as_dict()
         lse.get_statistics()

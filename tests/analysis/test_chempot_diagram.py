@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 from plotly.graph_objects import Figure
 from pytest import approx
@@ -14,14 +12,14 @@ from pymatgen.analysis.chempot_diagram import (
 )
 from pymatgen.core.composition import Element
 from pymatgen.entries.entry_tools import EntrySet
-from pymatgen.util.testing import PymatgenTest
+from pymatgen.util.testing import TEST_FILES_DIR, PymatgenTest
 
-module_dir = Path(__file__).absolute().parent
+TEST_DIR = f"{TEST_FILES_DIR}/analysis"
 
 
 class TestChemicalPotentialDiagram(PymatgenTest):
     def setUp(self):
-        self.entries = EntrySet.from_csv(str(module_dir / "pd_entries_test.csv"))
+        self.entries = EntrySet.from_csv(f"{TEST_DIR}/pd_entries_test.csv")
         self.cpd_ternary, self.cpd_ternary_formal = (
             ChemicalPotentialDiagram(entries=self.entries, default_min_limit=-25, formal_chempots=formal)
             for formal in [False, True]
@@ -40,7 +38,7 @@ class TestChemicalPotentialDiagram(PymatgenTest):
 
         elems = [Element("Li"), Element("Fe"), Element("O")]
         energies = [-1.91301487, -6.5961471, -25.54966885]
-        correct_el_refs = dict(zip(elems, energies))
+        correct_el_refs = dict(zip(elems, energies, strict=True))
 
         assert el_refs == approx(correct_el_refs)
 
@@ -48,7 +46,7 @@ class TestChemicalPotentialDiagram(PymatgenTest):
         el_refs = {elem: entry.energy for elem, entry in self.cpd_ternary_formal.el_refs.items()}
         elems = [Element("Li"), Element("Fe"), Element("O")]
         energies = [0, 0, 0]
-        correct_el_refs = dict(zip(elems, energies))
+        correct_el_refs = dict(zip(elems, energies, strict=True))
         assert el_refs == approx(correct_el_refs)
 
     def test_border_hyperplanes(self):

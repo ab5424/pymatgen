@@ -24,6 +24,8 @@ from pymatgen.entries.computed_entries import (
 from pymatgen.io.vasp.outputs import Vasprun
 from pymatgen.util.testing import TEST_FILES_DIR, VASP_OUT_DIR
 
+TEST_DIR = f"{TEST_FILES_DIR}/entries"
+
 vasp_run = Vasprun(f"{VASP_OUT_DIR}/vasprun.xml.gz")
 
 
@@ -199,8 +201,7 @@ class TestComputedEntry(TestCase):
         assert len(entry.energy_adjustments) == 1
 
     def test_conflicting_correction_adjustment(self):
-        """
-        Should raise a ValueError if a user tries to manually set both the correction
+        """Should raise a ValueError if a user tries to manually set both the correction
         and energy_adjustment, even if the values match.
         """
         ea = ConstantEnergyAdjustment(-10, name="Dummy adjustment")
@@ -236,6 +237,19 @@ class TestComputedEntry(TestCase):
             copy = entry.copy()
             assert entry == copy
             assert str(entry) == str(copy)
+
+    def test_from_dict_null_fields(self):
+        ce_dict = self.entry.as_dict()
+        for k in (
+            "energy_adjustments",
+            "parameters",
+            "data",
+        ):
+            ce = ce_dict.copy()
+            ce[k] = None
+            new_ce = ComputedEntry.from_dict(ce)
+            assert new_ce == self.entry
+            assert getattr(new_ce, k, None) is not None
 
 
 class TestComputedStructureEntry(TestCase):
@@ -452,9 +466,9 @@ class TestGibbsComputedStructureEntry(TestCase):
             for temp in self.temps
         }
 
-        with open(f"{TEST_FILES_DIR}/Mn-O_entries.json") as file:
+        with open(f"{TEST_DIR}/Mn-O_entries.json") as file:
             data = json.load(file)
-        with open(f"{TEST_FILES_DIR}/structure_CO2.json") as file:
+        with open(f"{TEST_DIR}/structure_CO2.json") as file:
             self.co2_struct = MontyDecoder().process_decoded(json.load(file))
 
         self.mp_entries = [MontyDecoder().process_decoded(d) for d in data]

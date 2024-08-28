@@ -128,10 +128,34 @@ pymatgen.io.lmto module
    :undoc-members:
    :show-inheritance:
 
+pymatgen.io.multiwfn module
+---------------------------
+
+.. automodule:: pymatgen.io.multiwfn
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 pymatgen.io.nwchem module
 -------------------------
 
 .. automodule:: pymatgen.io.nwchem
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pymatgen.io.openff module
+-------------------------
+
+.. automodule:: pymatgen.io.openff
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pymatgen.io.optimade module
+---------------------------
+
+.. automodule:: pymatgen.io.optimade
    :members:
    :undoc-members:
    :show-inheritance:

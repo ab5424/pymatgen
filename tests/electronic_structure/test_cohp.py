@@ -17,7 +17,7 @@ from pymatgen.electronic_structure.cohp import (
 from pymatgen.electronic_structure.core import Orbital, Spin
 from pymatgen.util.testing import TEST_FILES_DIR, PymatgenTest
 
-TEST_DIR = f"{TEST_FILES_DIR}/cohp"
+TEST_DIR = f"{TEST_FILES_DIR}/electronic_structure/cohp"
 
 
 class TestCohp(TestCase):
@@ -900,6 +900,7 @@ class TestCompleteCohp(PymatgenTest):
         for cohp1, cohp2 in zip(
             self.cobi_multi_B2H6.get_cohp_by_label("average").cohp[Spin.up],
             self.cobi_multi_B2H6_average2.get_cohp_by_label("average").cohp[Spin.up],
+            strict=True,
         ):
             print(cohp1)
             print(cohp2)
@@ -908,23 +909,26 @@ class TestCompleteCohp(PymatgenTest):
         for cohp1, cohp2 in zip(
             self.cobi_multi_B2H6.get_cohp_by_label("average").cohp[Spin.down],
             self.cobi_multi_B2H6_average2.get_cohp_by_label("average").cohp[Spin.down],
+            strict=True,
         ):
             assert cohp1 == approx(cohp2, abs=1e-4)
 
         for icohp1, icohp2 in zip(
             self.cobi_multi_B2H6.get_cohp_by_label("average").icohp[Spin.up],
             self.cobi_multi_B2H6_average2.get_cohp_by_label("average").icohp[Spin.up],
+            strict=True,
         ):
             assert icohp1 == approx(icohp2, abs=1e-4)
 
         for icohp1, icohp2 in zip(
             self.cobi_multi_B2H6.get_cohp_by_label("average").icohp[Spin.down],
             self.cobi_multi_B2H6_average2.get_cohp_by_label("average").icohp[Spin.down],
+            strict=True,
         ):
             assert icohp1 == approx(icohp2, abs=1e-4)
 
     def test_dict(self):
-        # The json files are dict representations of the COHPs from the LMTO
+        # The JSON files are dict representations of the COHPs from the LMTO
         # and LOBSTER calculations and should thus be the same.
 
         def is_equal(a, b):
@@ -932,7 +936,7 @@ class TestCompleteCohp(PymatgenTest):
             b_dict = b.as_dict()
             del a_dict["structure"]
             del b_dict["structure"]
-            return (a_dict == b_dict) and (a.structure == b.structure)
+            return a_dict == b_dict and a.structure == b.structure
 
         assert is_equal(self.cohp_lobster, self.cohp_lobster_dict)
         assert is_equal(self.cohp_orb, self.cohp_orb_dict)

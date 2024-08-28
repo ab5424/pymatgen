@@ -19,10 +19,12 @@ from pymatgen.core import Element, Lattice, Structure, SymmOp
 from pymatgen.util.coord import find_in_coord_list_pbc
 from pymatgen.util.testing import TEST_FILES_DIR, VASP_IN_DIR, PymatgenTest
 
+TEST_DIR = f"{TEST_FILES_DIR}/analysis/structure_matcher"
+
 
 class TestStructureMatcher(PymatgenTest):
     def setUp(self):
-        with open(f"{TEST_FILES_DIR}/TiO2_entries.json") as file:
+        with open(f"{TEST_FILES_DIR}/entries/TiO2_entries.json") as file:
             entries = json.load(file, cls=MontyDecoder)
         self.struct_list = [ent.structure for ent in entries]
         self.oxi_structs = [
@@ -31,7 +33,7 @@ class TestStructureMatcher(PymatgenTest):
         ]
 
     def test_ignore_species(self):
-        s1 = Structure.from_file(f"{TEST_FILES_DIR}/LiFePO4.cif")
+        s1 = Structure.from_file(f"{TEST_FILES_DIR}/cif/LiFePO4.cif")
         s2 = Structure.from_file(f"{VASP_IN_DIR}/POSCAR")
         matcher = StructureMatcher(ignored_species=["Li"], primitive_cell=False, attempt_supercell=True)
         assert matcher.fit(s1, s2)
@@ -327,7 +329,7 @@ class TestStructureMatcher(PymatgenTest):
     def test_left_handed_lattice(self):
         """Ensure Left handed lattices are accepted."""
         sm = StructureMatcher()
-        struct = Structure.from_file(f"{TEST_FILES_DIR}/Li3GaPCO7.json")
+        struct = Structure.from_file(f"{TEST_DIR}/Li3GaPCO7.json")
         assert sm.fit(struct, struct)
 
     def test_as_dict_and_from_dict(self):
@@ -351,8 +353,8 @@ class TestStructureMatcher(PymatgenTest):
 
     def test_supercell_fit(self):
         sm = StructureMatcher(attempt_supercell=False)
-        s1 = Structure.from_file(f"{TEST_FILES_DIR}/Al3F9.json")
-        s2 = Structure.from_file(f"{TEST_FILES_DIR}/Al3F9_distorted.json")
+        s1 = Structure.from_file(f"{TEST_DIR}/Al3F9.json")
+        s2 = Structure.from_file(f"{TEST_DIR}/Al3F9_distorted.json")
 
         assert not sm.fit(s1, s2)
 
@@ -463,7 +465,7 @@ class TestStructureMatcher(PymatgenTest):
 
         # test when s1 is exact supercell of s2
         result = sm.get_s2_like_s1(s1, s2)
-        for a, b in zip(s1, result):
+        for a, b in zip(s1, result, strict=True):
             assert a.distance(b) < 0.08
             assert a.species == b.species
 
@@ -481,7 +483,7 @@ class TestStructureMatcher(PymatgenTest):
         del subset_supercell[0]
         result = sm.get_s2_like_s1(subset_supercell, s2)
         assert len(result) == 6
-        for a, b in zip(subset_supercell, result):
+        for a, b in zip(subset_supercell, result, strict=False):
             assert a.distance(b) < 0.08
             assert a.species == b.species
 
@@ -498,7 +500,7 @@ class TestStructureMatcher(PymatgenTest):
         s2_missing_site = s2.copy()
         del s2_missing_site[1]
         result = sm.get_s2_like_s1(s1, s2_missing_site)
-        for a, b in zip((s1[i] for i in (0, 2, 4, 5)), result):
+        for a, b in zip((s1[i] for i in (0, 2, 4, 5)), result, strict=True):
             assert a.distance(b) < 0.08
             assert a.species == b.species
 
@@ -532,7 +534,7 @@ class TestStructureMatcher(PymatgenTest):
 
         result = sm.get_s2_like_s1(s1, s2)
 
-        for x, y in zip(s1, result):
+        for x, y in zip(s1, result, strict=True):
             assert x.distance(y) < 0.08
 
     def test_get_mapping(self):
@@ -763,8 +765,8 @@ class TestStructureMatcher(PymatgenTest):
     def test_electronegativity(self):
         sm = StructureMatcher(ltol=0.2, stol=0.3, angle_tol=5)
 
-        s1 = Structure.from_file(f"{TEST_FILES_DIR}/Na2Fe2PAsO4S4.json")
-        s2 = Structure.from_file(f"{TEST_FILES_DIR}/Na2Fe2PNO4Se4.json")
+        s1 = Structure.from_file(f"{TEST_DIR}/Na2Fe2PAsO4S4.json")
+        s2 = Structure.from_file(f"{TEST_DIR}/Na2Fe2PNO4Se4.json")
         assert sm.get_best_electronegativity_anonymous_mapping(s1, s2) == {
             Element("S"): Element("Se"),
             Element("As"): Element("N"),
